@@ -1,6 +1,6 @@
-# discord-template
+# discord-sabacc
 
-A boilerplate template to start making a Discord bot.
+A Discord bot that allows users to play Kessel Sabacc.
 
 ## Setup
 
