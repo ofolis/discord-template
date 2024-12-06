@@ -1,22 +1,40 @@
 import dotenv from "dotenv";
 import type {
-  Environment,
+  Config,
 } from "./types";
+import {
+  Utils,
+} from "./utils";
 
 export class Constants {
-  private static _environment: Environment | null = null;
+  private static _config: Config | null = null;
 
-  public static get environment(): Environment {
-    if (this._environment === null) {
-      dotenv.config();
-      if (typeof process.env.DISCORD_APPLICATION_ID !== 'string' || typeof process.env.DISCORD_BOT_TOKEN !== 'string') {
-        throw TypeError("One or more required environment variables are not defined.");
-      }
-      this._environment = {
-        "DISCORD_APPLICATION_ID": process.env.DISCORD_APPLICATION_ID,
-        "DISCORD_BOT_TOKEN": process.env.DISCORD_BOT_TOKEN,
+  public static get config(): Config {
+    if (this._config === null) {
+      this._config = {
+        "discordApplicationId": this.getEnvVariable("DISCORD_APPLICATION_ID"),
+        "discordBotToken": this.getEnvVariable("DISCORD_BOT_TOKEN"),
       };
     }
-    return this._environment;
+    return this._config;
+  }
+
+  private static envLoaded = false;
+
+  private static getEnvVariable(
+    key: string,
+  ): string {
+    if (!this.envLoaded) {
+      try {
+        dotenv.config();
+        this.envLoaded = true;
+      } catch (response: unknown) {
+        Utils.catchToError(response);
+      }
+    }
+    if (typeof process.env[key] !== "string") {
+      throw new Error(`Environment variable "${key}" is not defined.`);
+    }
+    return process.env[key];
   }
 }

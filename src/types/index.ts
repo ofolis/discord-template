@@ -1,3 +1,4 @@
+export type * from "./commands";
 export type {
-  Environment,
-} from "./environment";
+  Config,
+} from "./config";

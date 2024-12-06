@@ -1,17 +1,16 @@
-import {
-  type CommandInteraction,
-  SlashCommandBuilder,
-} from "discord.js";
+import type {
+  DiscordCommandInteraction,
+} from "../../discord";
+import type {
+  Command,
+} from "../../types";
 
-export class Ping {
-  public static get builder(): SlashCommandBuilder {
-    const builder: SlashCommandBuilder = new SlashCommandBuilder()
-      .setName("ping")
-      .setDescription("Replies with Pong!");
-    return builder;
-  }
-
-  public static async execute(interaction: CommandInteraction): Promise<void> {
+export const command: Command = {
+  "description": "Responds with \"Pong!\".",
+  "execute": async(interaction: DiscordCommandInteraction): Promise<void> => {
     await interaction.reply("Pong!");
-  }
-}
+  },
+  "isGlobal": false,
+  "isGuild": true,
+  "name": "ping",
+};

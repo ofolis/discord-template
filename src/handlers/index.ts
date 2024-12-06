@@ -1,3 +1,0 @@
-export {
-  Discord,
-} from './discord';

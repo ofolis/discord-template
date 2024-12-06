@@ -1,6 +1,6 @@
-# discord-sabacc
+# discord-template
 
-A Discord bot that allows users to play Kessel Sabacc.
+A Discord bot template.
 
 ## Setup
 

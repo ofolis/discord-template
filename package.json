@@ -4,7 +4,7 @@
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5"
   },
-  "description": "A Discord bot that allows users to play Kessel Sabacc.",
+  "description": "A Discord bot template.",
   "devDependencies": {
     "@stylistic/eslint-plugin": "^2.11.0",
     "@types/node": "^22.10.1",
@@ -18,7 +18,7 @@
   },
   "license": "ISC",
   "main": "dist/index.js",
-  "name": "discord-sabacc",
+  "name": "discord-template",
   "scripts": {
     "build": "tsup src/index.ts --minify",
     "dev": "tsx watch src/index.ts",
