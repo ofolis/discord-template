@@ -69,7 +69,7 @@ export class Discord {
       .map(([
         key,
       ]) => builderMap[key]);
-    const promises: Array<Promise<unknown>> = guildIds.map(async(guildId: string) => await rest.put(
+    const promises: Promise<unknown>[] = guildIds.map(async(guildId: string) => await rest.put(
       Routes.applicationGuildCommands(
         Constants.config.discordApplicationId,
         guildId,

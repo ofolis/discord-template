@@ -2,9 +2,6 @@ import dotenv from "dotenv";
 import type {
   Config,
 } from "./types";
-import {
-  Utils,
-} from "./utils";
 
 export class Constants {
   private static _config: Config | null = null;
@@ -19,18 +16,20 @@ export class Constants {
     return this._config;
   }
 
+  public static get dataPath(): string {
+    const currentDirectoryPath: string = process.cwd();
+    const dataDirectoryName: string = "data";
+    return `${currentDirectoryPath}/${dataDirectoryName}`;
+  }
+
   private static envLoaded = false;
 
   private static getEnvVariable(
     key: string,
   ): string {
     if (!this.envLoaded) {
-      try {
-        dotenv.config();
-        this.envLoaded = true;
-      } catch (response: unknown) {
-        Utils.catchToError(response);
-      }
+      dotenv.config();
+      this.envLoaded = true;
     }
     if (typeof process.env[key] !== "string") {
       throw new Error(`Environment variable "${key}" is not defined.`);

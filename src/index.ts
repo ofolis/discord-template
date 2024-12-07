@@ -5,17 +5,14 @@ import {
   Discord,
 } from "./discord";
 import {
-  Ping,
+  Ping
 } from "./handlers/commands";
 import type {
   Command,
 } from "./types";
-import {
-  Utils,
-} from "./utils";
 
 const commands: Command[] = [
-  Ping,
+  Ping
 ];
 
 function initializeApp(): void {
@@ -73,8 +70,8 @@ function initializeApp(): void {
         if (interactionCommand === undefined) {
           throw new ReferenceError(`Unknown command "${interaction.commandName}".`);
         }
-        interactionCommand.execute(interaction).catch((response: unknown) => {
-          Utils.catchToError(response);
+        interactionCommand.execute(interaction).catch((reason: unknown) => {
+          throw reason;
         });
       } catch (e) {
         console.error(`Failed to handle "${interaction.commandName}".`);
