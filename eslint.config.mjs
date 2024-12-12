@@ -148,6 +148,9 @@ export default tseslint.config(
         "error",
         "never",
       ],
+      "@stylistic/quotes": [
+        "error",
+      ],
       "@stylistic/quote-props": [
         "error",
       ],

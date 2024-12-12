@@ -5,14 +5,14 @@ import {
   Discord,
 } from "./discord";
 import {
-  Ping
+  Ping,
 } from "./handlers/commands";
 import type {
   Command,
 } from "./types";
 
 const commands: Command[] = [
-  Ping
+  Ping,
 ];
 
 function initializeApp(): void {
@@ -80,7 +80,7 @@ function initializeApp(): void {
     },
   );
   Discord.client.login(Constants.config.discordBotToken).catch((response: unknown) => {
-    console.error(`Failed to log in.`);
+    console.error("Failed to log in.");
     console.error(response);
   });
 }

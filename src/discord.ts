@@ -11,8 +11,9 @@ import type {
   Command,
 } from "./types";
 
-export type {
+export {
   CommandInteraction as DiscordCommandInteraction,
+  Message as DiscordMessage,
 } from "discord.js";
 
 export class Discord {
