@@ -7,7 +7,7 @@ import {
 } from "./types";
 
 export class IO {
-  public static loadData<DataType extends Saveable>(id: string): DataType | null {
+  public static loadData(id: string): Saveable | null {
     const jsonFilePath: string = `${Constants.dataPath}/${id}.json`;
     if (!fs.existsSync(jsonFilePath)) {
       return null;
@@ -16,7 +16,7 @@ export class IO {
       jsonFilePath,
       "utf8",
     );
-    const data: DataType = JSON.parse(jsonString) as DataType;
+    const data: Saveable = JSON.parse(jsonString) as Saveable;
     return data;
   }
 

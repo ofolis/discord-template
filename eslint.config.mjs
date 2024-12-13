@@ -8,10 +8,15 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   eslint.configs.recommended,
-  tseslint.configs.recommended,
-  tseslint.configs.strict,
-  tseslint.configs.stylistic,
+  tseslint.configs.recommendedTypeChecked,
+  tseslint.configs.strictTypeChecked,
+  tseslint.configs.stylisticTypeChecked,
   {
+    "languageOptions": {
+      "parserOptions": {
+        "project": "./tsconfig.json",
+      },
+    },
     "plugins": {
       "@stylistic": stylistic,
       "module-bindings-newline": moduleBindingsNewline,
@@ -89,6 +94,19 @@ export default tseslint.config(
       ],
       "@stylistic/lines-between-class-members": [
         "error",
+      ],
+      "@stylistic/member-delimiter-style": [
+        "error",
+        {
+          "multiline": {
+            "delimiter": "semi",
+            "requireLast": true,
+          },
+          "singleline": {
+            "delimiter": "semi",
+            "requireLast": false,
+          },
+        },
       ],
       "@typescript-eslint/no-inferrable-types": [
         "off",
@@ -238,6 +256,13 @@ export default tseslint.config(
       "@typescript-eslint/no-extraneous-class": [
         "off",
       ],
+      "@typescript-eslint/no-floating-promises": [
+        "error",
+        {
+          "ignoreIIFE": false,
+          "ignoreVoid": false,
+        },
+      ],
       "@typescript-eslint/no-unused-vars": [
         "error",
         {
@@ -256,10 +281,17 @@ export default tseslint.config(
       "complexity": [
         "error",
       ],
+      "linebreak-style": [
+        "error",
+        "unix",
+      ],
       "module-bindings-newline/export": [
         "error",
       ],
       "module-bindings-newline/import": [
+        "error",
+      ],
+      "require-await": [
         "error",
       ],
     },
