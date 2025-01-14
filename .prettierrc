@@ -1,7 +1,3 @@
 {
-  "overrides": [
-    {
-      "files": "*.json"
-    }
-  ]
+  "plugins": ["prettier-plugin-organize-imports"]
 }

@@ -1,3 +1,1 @@
-export {
-  command as Ping,
-} from "./ping";
+export { PingCommand } from "./ping-command";

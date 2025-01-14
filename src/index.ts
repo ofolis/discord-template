@@ -1,88 +1,92 @@
-import {
-  Constants,
-} from "./constants";
-import {
-  Discord,
-} from "./discord";
-import {
-  Ping,
-} from "./handlers/commands";
-import type {
-  Command,
-} from "./types";
+import { Command, Discord, Environment, Log } from "./core";
+import { PingCommand } from "./handlers";
 
-const commands: Command[] = [
-  Ping,
-];
+const commands: Command[] = [new PingCommand()];
 
 function initializeApp(): void {
-  const commandMap: Record<string, Command> = commands.reduce<Record<string, Command>>(
-    (map, command) => {
-      map[command.name] = command;
-      return map;
-    },
-    {},
+  if (Environment.config.devMode) {
+    Log.info("Running in development mode.");
+  }
+  Log.info(
+    `Initializing ${Environment.packageContext.name} (${Environment.packageContext.version ?? "NO VERSION"})...`,
   );
-  Discord.client.once(
-    "ready",
-    () => {
-      console.log("Initializing Discord bot...");
-      Discord.deployCommands(commandMap).then(
-        () => {
-          console.log("Discord bot is ready.");
-        },
-        (reason: unknown) => {
-          console.error("Failed to initialize Discord bot.");
-          console.error(reason);
-        },
-      );
-    },
-  );
-  Discord.client.on(
-    "guildCreate",
-    (guild) => {
-      console.log(`Initializing guild ${guild.id}...`);
-      Discord.deployCommands(
-        commandMap,
-        [
-          guild.id,
-        ],
-      ).then(
-        () => {
-          console.log(`Guild ${guild.id} is ready.`);
-        },
-        (reason: unknown) => {
-          console.error(`Failed to initialize guild ${guild.id}.`);
-          console.error(reason);
-        },
-      );
-    },
-  );
-  Discord.client.on(
-    "interactionCreate",
-    (interaction) => {
-      if (!interaction.isCommand()) {
-        return;
-      }
-      console.log(interaction);
-      try {
-        const interactionCommand: Command | undefined = commands.find(command => command.name === interaction.commandName);
-        if (interactionCommand === undefined) {
-          throw new ReferenceError(`Unknown command "${interaction.commandName}".`);
-        }
-        interactionCommand.execute(interaction).catch((reason: unknown) => {
-          throw reason;
-        });
-      } catch (e) {
-        console.error(`Failed to handle "${interaction.commandName}".`);
-        console.error(e);
-      }
-    },
-  );
-  Discord.client.login(Constants.config.discordBotToken).catch((response: unknown) => {
-    console.error("Failed to log in.");
-    console.error(response);
+  Discord.client.once("ready", () => {
+    Discord.deployCommands(commands).then(
+      () => {
+        Log.success("Discord bot is ready.");
+      },
+      (reason: unknown) => {
+        Log.error("Failed to initialize Discord bot.", reason);
+      },
+    );
   });
+  Discord.client.on("guildCreate", (guild) => {
+    Discord.deployCommands(commands, [guild.id]).then(
+      () => {
+        Log.success("Discord bot deployed to new guild.", { guild });
+      },
+      (reason: unknown) => {
+        Log.error("Failed to deploy Discord bot on new guild.", reason, {
+          guild,
+        });
+      },
+    );
+  });
+  Discord.client.on("interactionCreate", (interaction) => {
+    if (!interaction.isCommand()) {
+      return;
+    }
+    const interactionInfo: Record<string, unknown> = {
+      channelId: interaction.channelId,
+      command: interaction.commandName,
+      createdAt: interaction.createdAt.toUTCString(),
+      guild:
+        interaction.guild !== null
+          ? {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+            }
+          : null,
+      id: interaction.id,
+      user: {
+        displayName: interaction.user.displayName,
+        globalName: interaction.user.globalName,
+        id: interaction.user.id,
+        username: interaction.user.username,
+      },
+    };
+    Log.info(`New interaction ${interaction.id}.`, interactionInfo);
+    try {
+      const interactionCommand: Command | undefined = commands.find(
+        (command) => command.name === interaction.commandName,
+      );
+      if (interactionCommand === undefined) {
+        Log.throw(
+          "Cannot handle interaction. Unknown command was provided.",
+          interaction,
+        );
+      }
+      interactionCommand.execute(interaction).then(
+        () => {
+          Log.success(`Completed interaction ${interaction.id}.`);
+        },
+        (reason: unknown) => {
+          Log.throw(reason, interaction);
+        },
+      );
+    } catch (reason: unknown) {
+      Log.error(
+        `Failed to handle interaction ${interaction.id}.`,
+        reason,
+        interaction,
+      );
+    }
+  });
+  Discord.client
+    .login(Environment.config.discordBotToken)
+    .catch((reason: unknown) => {
+      Log.error("Failed to log into Discord.", reason);
+    });
 }
 
 initializeApp();

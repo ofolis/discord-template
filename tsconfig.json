@@ -3,7 +3,8 @@
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "forceConsistentCasingInFileNames": true,
-    "module": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
     "noImplicitAny": true,
     "noImplicitReturns": true,
     "noUnusedLocals": true,
@@ -18,5 +19,5 @@
     "target": "ESNext",
     "useUnknownInCatchVariables": true
   },
-  "include": ["src/**/*", "eslint.config.mjs"]
+  "include": ["src/**/*", "commitlint.config.mjs", "eslint.config.mjs"]
 }

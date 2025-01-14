@@ -2,29 +2,36 @@
   "author": "Josh Jones",
   "dependencies": {
     "discord.js": "^14.16.3",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "random-js": "^2.1.0"
   },
-  "description": "A Discord bot that allows users to play Kessel Sabacc.",
+  "description": "A Discord bot template.",
   "devDependencies": {
-    "@stylistic/eslint-plugin": "^2.11.0",
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
     "@types/node": "^22.10.1",
+    "@yao-pkg/pkg": "^6.2.0",
+    "commitizen": "^4.3.1",
+    "cz-conventional-changelog": "^3.3.0",
     "eslint": "^9.16.0",
-    "eslint-plugin-module-bindings-newline": "^1.0.1",
-    "prettier": "^3.4.1",
+    "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.1.7",
+    "prettier": "3.4.2",
+    "prettier-plugin-organize-imports": "^4.1.0",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.17.0"
   },
-  "license": "ISC",
   "main": "dist/index.js",
-  "name": "discord-sabacc",
+  "name": "discord-template",
+  "private": true,
   "scripts": {
-    "build": "tsup src/index.ts --minify",
-    "dev": "tsx watch src/index.ts",
-    "format": "prettier --write \"**/*.json\"",
-    "lint": "eslint  --fix",
-    "start": "node ."
-  },
-  "version": "1.0.0"
+    "build": "tsup src/index.ts --minify && pkg dist/index.js --targets node20-linux,node20-macos,node20-win --out-path build",
+    "dev": "tsx watch src/index.ts 2>&1 | tee console.log",
+    "format": "prettier . --write",
+    "lint": "prettier . --list-different && eslint",
+    "start": "node .",
+    "prepare": "husky"
+  }
 }

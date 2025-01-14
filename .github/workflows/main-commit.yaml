@@ -1,0 +1,100 @@
+jobs:
+  main-ci:
+    name: Main CI
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout files
+        uses: actions/checkout@v4
+      - name: Setup NodeJS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - env:
+          NODE_AUTH_TOKEN: ${{ secrets.CI_ACCESS_TOKEN }}
+        name: Install dependencies
+        run: npm ci
+      - name: Run linting processes
+        run: npm run lint
+      - env:
+          GITHUB_TOKEN: ${{ secrets.CI_ACCESS_TOKEN }}
+        id: semantic
+        name: Run Semantic Release
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          branches: |
+            [
+              'main'
+            ]
+          extra_plugins: |
+            @semantic-release/commit-analyzer@13.0.1
+            @semantic-release/github@11.0.1
+            @semantic-release/release-notes-generator@14.0.3
+      - env:
+          GITHUB_TOKEN: ${{ secrets.CI_ACCESS_TOKEN }}
+        if: steps.semantic.outputs.new_release_published == 'true'
+        name: Get release ID
+        run: |
+          RELEASE_TAG=${{ steps.semantic.outputs.new_release_git_tag }}
+          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/$RELEASE_TAG --jq '.id')
+          echo "release_id=$RELEASE_ID" >> $GITHUB_ENV
+      - if: steps.semantic.outputs.new_release_published == 'true'
+        name: Run build processes
+        run: npm run build
+      - if: steps.semantic.outputs.new_release_published == 'true'
+        name: Create release assets
+        run: |
+          PROJECT_NAME="${GITHUB_REPOSITORY#*/}"
+          FILENAME="${PROJECT_NAME}-${{ steps.semantic.outputs.new_release_version }}"
+          mkdir -p release
+          declare -A platforms=(
+            [linux]="index-linux"
+            [macos]="index-macos"
+            [win]="index-win.exe"
+          )
+          for platform in "${!platforms[@]}"; do
+            src_file="build/${platforms[$platform]}"
+            if [[ "$platform" == "win" ]]; then
+              dest_file="${PROJECT_NAME}.exe"
+            else
+              dest_file="${PROJECT_NAME}"
+            fi
+            cp "$src_file" "$dest_file"
+            zip -r "release/${FILENAME}-${platform}.zip" "$dest_file" images .env.example LICENSE readme.md
+            rm "$dest_file"
+          done
+          echo "asset_filename=${FILENAME}" >> $GITHUB_ENV
+      - env:
+          GITHUB_TOKEN: ${{ secrets.CI_ACCESS_TOKEN }}
+        if: steps.semantic.outputs.new_release_published == 'true'
+        name: Upload Linux release asset
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: https://uploads.github.com/repos/${{ github.repository }}/releases/${{ env.release_id }}/assets{?name,label}
+          asset_path: release/${{ env.asset_filename }}-linux.zip
+          asset_name: ${{ env.asset_filename }}-linux.zip
+          asset_content_type: application/zip
+      - env:
+          GITHUB_TOKEN: ${{ secrets.CI_ACCESS_TOKEN }}
+        if: steps.semantic.outputs.new_release_published == 'true'
+        name: Upload MacOS release asset
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: https://uploads.github.com/repos/${{ github.repository }}/releases/${{ env.release_id }}/assets{?name,label}
+          asset_path: release/${{ env.asset_filename }}-macos.zip
+          asset_name: ${{ env.asset_filename }}-macos.zip
+          asset_content_type: application/zip
+      - env:
+          GITHUB_TOKEN: ${{ secrets.CI_ACCESS_TOKEN }}
+        if: steps.semantic.outputs.new_release_published == 'true'
+        name: Upload Windows release asset
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: https://uploads.github.com/repos/${{ github.repository }}/releases/${{ env.release_id }}/assets{?name,label}
+          asset_path: release/${{ env.asset_filename }}-win.zip
+          asset_name: ${{ env.asset_filename }}-win.zip
+          asset_content_type: application/zip
+name: Main Commit
+on:
+  push:
+    branches:
+      - main
