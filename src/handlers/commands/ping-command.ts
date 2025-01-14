@@ -8,7 +8,7 @@ export class PingCommand implements Command {
 
   public readonly isGuild = true;
 
-  public readonly name = "info";
+  public readonly name = "ping";
 
   public async execute(interaction: DiscordCommandInteraction): Promise<void> {
     await Discord.sendMessage(interaction.channelId, "Pong!");
