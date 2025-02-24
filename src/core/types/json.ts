@@ -1,4 +1,4 @@
-export type Saveable = {
+export type Json = {
   [key: string]:
     | boolean
     | boolean[]
@@ -6,9 +6,9 @@ export type Saveable = {
     | number[]
     | string
     | string[]
-    | Saveable
-    | Saveable[]
-    | Saveable[][]
+    | Json
+    | Json[]
+    | Json[][]
     | null
     | undefined;
 };

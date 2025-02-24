@@ -9,15 +9,15 @@
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "outDir": "./dist",
+    "outDir": "dist",
     "removeComments": true,
     "resolveJsonModule": true,
-    "rootDir": "./src",
+    "rootDir": "src",
     "skipLibCheck": true,
     "strict": true,
     "strictNullChecks": true,
     "target": "ESNext",
     "useUnknownInCatchVariables": true
   },
-  "include": ["src/**/*", "commitlint.config.mjs", "eslint.config.mjs"]
+  "include": ["*.mjs", "eslint-rules/*.mjs", "src/**/*.ts"]
 }

@@ -1,7 +1,13 @@
-import { Command, Discord, Environment, Log } from "./core";
-import { PingCommand } from "./handlers";
+import { Ping } from "./commands";
+import {
+  ChannelCommandMessage,
+  Command,
+  Discord,
+  Environment,
+  Log,
+} from "./core";
 
-const commands: Command[] = [new PingCommand()];
+const commands: Command[] = [new Ping()];
 
 function initializeApp(): void {
   if (Environment.config.devMode) {
@@ -10,29 +16,33 @@ function initializeApp(): void {
   Log.info(
     `Initializing ${Environment.packageContext.name} (${Environment.packageContext.version ?? "NO VERSION"})...`,
   );
+
+  // Ready Event
   Discord.client.once("ready", () => {
-    Discord.deployCommands(commands).then(
-      () => {
+    Discord.deployCommands(commands)
+      .then(() => {
         Log.success("Discord bot is ready.");
-      },
-      (reason: unknown) => {
+      })
+      .catch((reason: unknown) => {
         Log.error("Failed to initialize Discord bot.", reason);
-      },
-    );
+      });
   });
-  Discord.client.on("guildCreate", (guild) => {
-    Discord.deployCommands(commands, [guild.id]).then(
-      () => {
+
+  // Guild Create Event
+  Discord.client.on("guildCreate", guild => {
+    Discord.deployCommands(commands, [guild.id])
+      .then(() => {
         Log.success("Discord bot deployed to new guild.", { guild });
-      },
-      (reason: unknown) => {
+      })
+      .catch((reason: unknown) => {
         Log.error("Failed to deploy Discord bot on new guild.", reason, {
           guild,
         });
-      },
-    );
+      });
   });
-  Discord.client.on("interactionCreate", (interaction) => {
+
+  // Interaction Create Event
+  Discord.client.on("interactionCreate", interaction => {
     if (!interaction.isCommand()) {
       return;
     }
@@ -56,34 +66,41 @@ function initializeApp(): void {
       },
     };
     Log.info(`New interaction ${interaction.id}.`, interactionInfo);
-    try {
-      const interactionCommand: Command | undefined = commands.find(
-        (command) => command.name === interaction.commandName,
-      );
-      if (interactionCommand === undefined) {
-        Log.throw(
-          "Cannot handle interaction. Unknown command was provided.",
-          interaction,
-        );
-      }
-      interactionCommand.execute(interaction).then(
-        () => {
-          Log.success(`Completed interaction ${interaction.id}.`);
-        },
-        (reason: unknown) => {
-          Log.throw(reason, interaction);
-        },
-      );
-    } catch (reason: unknown) {
+    const interactionCommand: Command | undefined = commands.find(
+      command => command.name === interaction.commandName,
+    );
+    if (interactionCommand === undefined) {
       Log.error(
-        `Failed to handle interaction ${interaction.id}.`,
-        reason,
+        "Cannot handle interaction. Unknown command was provided.",
         interaction,
       );
+      return;
     }
+    ChannelCommandMessage.create(interaction, interactionCommand.isPrivate)
+      .then(privateChannelMessage => {
+        interactionCommand
+          .execute(privateChannelMessage)
+          .then(() => {
+            Log.success(`Completed interaction ${interaction.id}.`);
+          })
+          .catch((reason: unknown) => {
+            Log.error("Could not complete command execution.", reason);
+          });
+      })
+      .catch((reason: unknown) => {
+        Log.error(
+          "Could not create user channel interaction from command interaction.",
+          reason,
+        );
+      });
   });
+
+  // Login
   Discord.client
     .login(Environment.config.discordBotToken)
+    .then(() => {
+      Log.debug("Discord bot logged in successfully.");
+    })
     .catch((reason: unknown) => {
       Log.error("Failed to log into Discord.", reason);
     });

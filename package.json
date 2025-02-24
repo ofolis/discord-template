@@ -9,6 +9,7 @@
   "devDependencies": {
     "@commitlint/cli": "^19.6.1",
     "@commitlint/config-conventional": "^19.6.0",
+    "@stylistic/eslint-plugin": "^4.0.0",
     "@types/node": "^22.10.1",
     "@yao-pkg/pkg": "^6.2.0",
     "commitizen": "^4.3.1",
@@ -18,16 +19,17 @@
     "husky": "^9.1.7",
     "prettier": "3.4.2",
     "prettier-plugin-organize-imports": "^4.1.0",
-    "tsup": "^8.3.5",
+    "prettier-plugin-sort-members": "^0.2.2",
+    "tsup": "^8.3.6",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.17.0"
   },
   "main": "dist/index.js",
-  "name": "discord-template",
+  "name": "discord-sabacc",
   "private": true,
   "scripts": {
-    "build": "tsup src/index.ts --minify && pkg dist/index.js --targets node20-linux,node20-macos,node20-win --out-path build",
+    "build": "tsup src/index.ts && pkg dist/index.js --targets node20-linux,node20-macos,node20-win --out-path build",
     "dev": "tsx watch src/index.ts 2>&1 | tee console.log",
     "format": "prettier . --write",
     "lint": "prettier . --list-different && eslint",

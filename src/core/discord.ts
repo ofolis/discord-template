@@ -1,173 +1,21 @@
-import {
-  ActionRowBuilder,
-  ActionRowData,
-  APIActionRowComponent,
-  APIMessageActionRowComponent,
-  ButtonBuilder,
-  ButtonInteraction,
-  Channel,
-  ChannelType,
-  Client,
-  CollectorFilter,
-  CommandInteraction,
-  ComponentType,
-  InteractionResponse,
-  JSONEncodable,
-  Message,
-  MessageActionRowComponentBuilder,
-  MessageActionRowComponentData,
-  MessageComponentInteraction,
-  REST,
-  Routes,
-  SlashCommandBuilder,
-  TextChannel,
-} from "discord.js";
-import { Environment, Log } from ".";
+import * as discordJs from "discord.js";
+import { ChannelMessage, CommandOptionType, Environment, Log } from ".";
 import { Command } from "../core";
 
-export {
-  ButtonBuilder as DiscordButtonBuilder,
-  ButtonInteraction as DiscordButtonInteraction,
-  ButtonStyle as DiscordButtonStyle,
-  CommandInteraction as DiscordCommandInteraction,
-  InteractionResponse as DiscordInteractionResponse,
-  Message as DiscordMessage,
-  MessageComponentInteraction as DiscordMessageComponentInteraction,
-  User as DiscordUser,
-} from "discord.js";
-
 export class Discord {
-  private static _client: Client | null = null;
+  private static __client: discordJs.Client | null = null;
 
-  public static get client(): Client {
-    if (this._client === null) {
+  public static get client(): discordJs.Client {
+    if (this.__client === null) {
       Log.debug("Creating Discord client...");
-      this._client = new Client({
+      this.__client = new discordJs.Client({
         intents: ["DirectMessages", "Guilds", "GuildMessages"],
       });
       Log.debug("Discord client created successfully.", {
-        client: this._client,
+        client: this.__client,
       });
     }
-    return this._client;
-  }
-
-  private static buttonMapToActionRow(
-    buttonMap: Record<string, ButtonBuilder>,
-  ): ActionRowBuilder<ButtonBuilder> {
-    if (Object.keys(buttonMap).length === 0) {
-      Log.throw(
-        "Cannot create Discord action row. Button map contained no entries.",
-      );
-    }
-    const buttonRow: ActionRowBuilder<ButtonBuilder> =
-      new ActionRowBuilder<ButtonBuilder>();
-    Object.entries(buttonMap).forEach(([customId, button]) => {
-      button.setCustomId(customId);
-      buttonRow.addComponents(button);
-    });
-    return buttonRow;
-  }
-
-  private static createComponentsValue(
-    buttonMap?: Record<string, ButtonBuilder>,
-  ):
-    | (
-        | JSONEncodable<APIActionRowComponent<APIMessageActionRowComponent>>
-        | ActionRowData<
-            MessageActionRowComponentData | MessageActionRowComponentBuilder
-          >
-        | APIActionRowComponent<APIMessageActionRowComponent>
-      )[]
-    | undefined {
-    if (buttonMap === undefined) {
-      return undefined;
-    }
-    return Object.keys(buttonMap).length > 0
-      ? [this.buttonMapToActionRow(buttonMap)]
-      : [];
-  }
-
-  private static async deployGlobalCommands(
-    rest: REST,
-    commandMap: Record<
-      string,
-      {
-        builder: SlashCommandBuilder;
-        command: Command;
-      }
-    >,
-  ): Promise<void> {
-    Log.debug("Deploying Discord global commands...", { commandMap });
-    const commandBuilders: SlashCommandBuilder[] = Object.values(commandMap)
-      .filter((value) => value.command.isGlobal)
-      .map((value) => value.builder);
-    await rest.put(
-      Routes.applicationCommands(Environment.config.discordApplicationId),
-      {
-        body: commandBuilders,
-      },
-    );
-    Log.debug("Discord global commands deployed successfully.");
-  }
-
-  private static async deployGuildCommands(
-    rest: REST,
-    commandMap: Record<
-      string,
-      {
-        builder: SlashCommandBuilder;
-        command: Command;
-      }
-    >,
-    guildIds: string[],
-  ): Promise<void> {
-    Log.debug("Deploying Discord guild commands...", { commandMap, guildIds });
-    const commandBuilders: SlashCommandBuilder[] = Object.values(commandMap)
-      .filter((value) => value.command.isGuild)
-      .map((value) => value.builder);
-    await Promise.all(
-      guildIds.map((guildId) =>
-        rest.put(
-          Routes.applicationGuildCommands(
-            Environment.config.discordApplicationId,
-            guildId,
-          ),
-          {
-            body: commandBuilders,
-          },
-        ),
-      ),
-    );
-    Log.debug("Discord guild commands deployed successfully.");
-  }
-
-  private static getChannel(channelId: string): TextChannel {
-    Log.debug("Retrieving Discord channel...", { channelId });
-    const channel: Channel | undefined =
-      this.client.channels.cache.get(channelId);
-    if (channel === undefined) {
-      Log.throw(
-        "Cannot get Discord channel. ID was not found in the channel cache.",
-        channelId,
-      );
-    }
-    if (channel.type !== ChannelType.GuildText) {
-      Log.throw(
-        "Cannot get Discord channel. Channel at ID was not a guild text channel.",
-        channel,
-      );
-    }
-    Log.debug("Discord channel retrieved successfully.", channel);
-    return channel;
-  }
-
-  public static async deleteSentItem(
-    sentItem: Message | InteractionResponse,
-  ): Promise<void> {
-    Log.debug("Deleting Discord sent item...", { sentItem });
-    await sentItem.delete();
-    Log.debug("Discord sent item deleted successfully.");
+    return this.__client;
   }
 
   public static async deployCommands(
@@ -175,182 +23,192 @@ export class Discord {
     guildIds?: string[],
   ): Promise<void> {
     Log.debug("Deploying Discord commands...", { commandList, guildIds });
-    const rest: REST = new REST({
+    const rest: discordJs.REST = new discordJs.REST({
       version: "10",
     }).setToken(Environment.config.discordBotToken);
-    const commandMap: Record<
-      string,
-      {
-        builder: SlashCommandBuilder;
-        command: Command;
-      }
-    > = {};
-    commandList.forEach((command) => {
-      if (command.name in commandMap) {
-        Log.throw(
-          "Cannot deploy commands. Command names are not unique.",
-          commandMap,
-        );
-      }
-      commandMap[command.name] = {
-        builder: new SlashCommandBuilder()
+    const globalCommandMap: Record<string, discordJs.SlashCommandBuilder> = {};
+    const guildCommandMap: Record<string, discordJs.SlashCommandBuilder> = {};
+    commandList.forEach(command => {
+      const slashCommandBuilder: discordJs.SlashCommandBuilder =
+        new discordJs.SlashCommandBuilder()
           .setName(command.name)
-          .setDescription(command.description),
-        command,
-      };
+          .setDescription(command.description);
+      command.options.forEach(option => {
+        switch (option.type) {
+          case CommandOptionType.BOOLEAN:
+            slashCommandBuilder.addBooleanOption(booleanOption =>
+              booleanOption
+                .setName(option.name)
+                .setDescription(option.description)
+                .setRequired(option.isRequired),
+            );
+            break;
+          case CommandOptionType.INTEGER:
+            slashCommandBuilder.addIntegerOption(integerOption =>
+              integerOption
+                .setName(option.name)
+                .setDescription(option.description)
+                .setRequired(option.isRequired)
+                .setMaxValue(option.maxValue)
+                .setMinValue(option.minValue),
+            );
+            break;
+          case CommandOptionType.NUMBER:
+            slashCommandBuilder.addNumberOption(numberOption =>
+              numberOption
+                .setName(option.name)
+                .setDescription(option.description)
+                .setRequired(option.isRequired)
+                .setMaxValue(option.maxValue)
+                .setMinValue(option.minValue),
+            );
+            break;
+          case CommandOptionType.STRING:
+            slashCommandBuilder.addStringOption(stringOption =>
+              stringOption
+                .setName(option.name)
+                .setDescription(option.description)
+                .setRequired(option.isRequired)
+                .setMaxLength(option.maxLength)
+                .setMinLength(option.minLength),
+            );
+            break;
+          default:
+            Log.throw("Cannot build command. Unknown command option type.", {
+              option,
+            });
+        }
+      });
+      if (command.isGlobal) {
+        if (command.name in globalCommandMap) {
+          Log.throw(
+            "Cannot deploy global commands. Names in command list are not unique.",
+            { commandList },
+          );
+        }
+        globalCommandMap[command.name] = slashCommandBuilder;
+      }
+      if (command.isGuild) {
+        if (command.name in guildCommandMap) {
+          Log.throw(
+            "Cannot deploy guild commands. Names in command list are not unique.",
+            { commandList },
+          );
+        }
+        guildCommandMap[command.name] = slashCommandBuilder;
+      }
     });
     guildIds = guildIds ?? Array.from(this.client.guilds.cache.keys());
-    await this.deployGlobalCommands(rest, commandMap);
-    await this.deployGuildCommands(rest, commandMap, guildIds);
+    await this.__deployGlobalCommands(rest, Object.values(globalCommandMap));
+    await this.__deployGuildCommands(
+      rest,
+      Object.values(guildCommandMap),
+      guildIds,
+    );
     Log.debug("Discord commands deployed successfully.");
   }
 
-  public static async getButtonInteraction(
-    context: InteractionResponse | Message,
-    filter: CollectorFilter<[MessageComponentInteraction]> | null = null,
-    timeout = 60000,
-  ): Promise<ButtonInteraction | null> {
-    Log.debug("Retrieving Discord button interaction...", {
-      context,
-      filter,
-      timeout,
-    });
-    try {
-      const buttonInteraction: ButtonInteraction =
-        await context.awaitMessageComponent<ComponentType.Button>({
-          componentType: ComponentType.Button,
-          filter: filter ?? undefined,
-          time: timeout,
-        });
-      Log.debug(
-        "Discord button interaction retrieved successfully.",
-        buttonInteraction,
-      );
-      return buttonInteraction;
-    } catch (result: unknown) {
-      if (result instanceof Error && result.message.endsWith("reason: time")) {
-        return null;
-      }
-      throw result;
+  public static formatAvatarUrl(
+    user: Pick<discordJs.User, "avatar" | "id">,
+  ): string | null {
+    if (user.avatar === null) {
+      return null;
     }
+    return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.webp?size=240`;
   }
 
-  public static async sendInteractionResponse(
-    interaction: CommandInteraction | MessageComponentInteraction,
-    content: string,
-    isPrivate = false,
-    buttonMap?: Record<string, ButtonBuilder>,
-  ): Promise<InteractionResponse> {
-    Log.debug("Sending Discord interaction response...", {
-      interaction,
-      content,
-      isPrivate,
-      buttonMap,
-    });
-    const interactionResponse: InteractionResponse = await interaction.reply({
-      components: this.createComponentsValue(buttonMap),
-      content,
-      ephemeral: isPrivate,
-    });
-    Log.debug(
-      "Discord interaction response sent successfully.",
-      interactionResponse,
-    );
-    return interactionResponse;
+  public static formatChannelMentionString(): string {
+    return "@everyone";
   }
 
-  public static async sendMessage(
+  public static formatUserMentionString(
+    user: Pick<discordJs.User, "id">,
+  ): string {
+    return `<@${user.id}>`;
+  }
+
+  public static formatUserNameString(
+    user: Pick<discordJs.User, "globalName" | "username">,
+  ): string {
+    return user.globalName ?? user.username;
+  }
+
+  public static async sendChannelMessage(
     channelId: string,
-    content: string,
-    buttonMap?: Record<string, ButtonBuilder>,
-    attachments?: {
-      attachment: string;
-      name: string;
-    }[],
-  ): Promise<Message> {
-    Log.debug("Sending Discord message...", {
+    messageCreateOptions: discordJs.MessageCreateOptions,
+  ): Promise<ChannelMessage> {
+    Log.debug("Sending Discord channel message...", {
       channelId,
-      content,
-      buttonMap,
-      attachments,
+      messageCreateOptions,
     });
-    const channel: TextChannel = this.getChannel(channelId);
-    const message: Message = await channel.send({
-      components: this.createComponentsValue(buttonMap),
-      content,
-      files: attachments,
-    });
-    Log.debug("Discord message sent successfully.", message);
-    return message;
+    const channel: discordJs.TextChannel = this.__getChannel(channelId);
+    const message: discordJs.Message = await channel.send(messageCreateOptions);
+    Log.debug("Discord message sent successfully.", { message });
+    const channelMessage: ChannelMessage = new ChannelMessage(
+      message,
+      channelId,
+    );
+    return channelMessage;
   }
 
-  public static async sendPersistentInteractionResponse(
-    interaction: CommandInteraction | MessageComponentInteraction,
-    content: string,
-    isPrivate = false,
-    buttonMap?: Record<string, ButtonBuilder>,
-  ): Promise<InteractionResponse> {
-    Log.debug("Sending Discord persistent interaction response...");
-    let interactionResponse: InteractionResponse;
-    if (interaction instanceof MessageComponentInteraction) {
-      Log.debug(
-        "Handling persistent interaction response as a MessageComponentInteraction.",
-      );
-      interactionResponse = await this.updateInteractionSourceItem(
-        interaction,
-        content,
-        buttonMap,
-      );
-    } else {
-      Log.debug(
-        "Handling persistent interaction response as a CommandInteraction.",
-      );
-      interactionResponse = await this.sendInteractionResponse(
-        interaction,
-        content,
-        isPrivate,
-        buttonMap,
+  private static async __deployGlobalCommands(
+    rest: discordJs.REST,
+    commands: discordJs.SlashCommandBuilder[],
+  ): Promise<void> {
+    Log.debug("Deploying global commands to Discord...", { commands });
+    await rest.put(
+      discordJs.Routes.applicationCommands(
+        Environment.config.discordApplicationId,
+      ),
+      {
+        body: commands,
+      },
+    );
+    Log.debug("Discord global commands deployed successfully.");
+  }
+
+  private static async __deployGuildCommands(
+    rest: discordJs.REST,
+    commands: discordJs.SlashCommandBuilder[],
+    guildIds: string[],
+  ): Promise<void> {
+    Log.debug("Deploying commands to Discord guilds...", {
+      commands,
+      guildIds,
+    });
+    await Promise.all(
+      guildIds.map(guildId =>
+        rest.put(
+          discordJs.Routes.applicationGuildCommands(
+            Environment.config.discordApplicationId,
+            guildId,
+          ),
+          {
+            body: commands,
+          },
+        ),
+      ),
+    );
+    Log.debug("Discord guild commands deployed successfully.");
+  }
+
+  private static __getChannel(channelId: string): discordJs.TextChannel {
+    Log.debug("Retrieving Discord channel...", { channelId });
+    const channel: discordJs.Channel | undefined =
+      this.client.channels.cache.get(channelId);
+    if (channel === undefined) {
+      Log.throw(
+        "Cannot get Discord channel. ID was not found in the channel cache.",
+        { channelId },
       );
     }
-    Log.debug("Discord persistent interaction response sent successfully.");
-    return interactionResponse;
-  }
-
-  public static async updateInteractionSourceItem(
-    interaction: MessageComponentInteraction,
-    content: string,
-    buttonMap?: Record<string, ButtonBuilder>,
-  ): Promise<InteractionResponse> {
-    Log.debug("Updating Discord interaction source item...", {
-      interaction,
-      content,
-      buttonMap,
-    });
-    const interactionResponse: InteractionResponse = await interaction.update({
-      components: this.createComponentsValue(buttonMap),
-      content,
-    });
-    Log.debug(
-      "Discord interaction source item updated successfully.",
-      interactionResponse,
-    );
-    return interactionResponse;
-  }
-
-  public static async updateSentItem(
-    sentItem: Message | InteractionResponse,
-    content: string,
-    buttonMap?: Record<string, ButtonBuilder>,
-  ): Promise<void> {
-    Log.debug("Updating Discord sent item...", {
-      sentItem,
-      content,
-      buttonMap,
-    });
-    const message: Message = await sentItem.edit({
-      components: this.createComponentsValue(buttonMap),
-      content,
-    });
-    Log.debug("Discord sent item updated successfully.", message);
+    if (channel.type !== discordJs.ChannelType.GuildText) {
+      Log.throw(
+        "Cannot get Discord channel. Channel at ID was not a guild text channel.",
+        { channel },
+      );
+    }
+    Log.debug("Discord channel retrieved successfully.", { channel });
+    return channel;
   }
 }
