@@ -1,6 +1,7 @@
-import * as icons from "../constants/icons";
+import { ICONS } from "../constants";
 import { DataController } from "../controllers";
 import { ChannelCommandMessage, Command, CommandOption } from "../core";
+import { IconName } from "../enums";
 import { ChannelState } from "../saveables";
 
 export class Ping implements Command {
@@ -28,7 +29,7 @@ export class Ping implements Command {
     channelState.setUserNickname(message.user.id, message.member.nickname);
     // Execute command
     await message.update({
-      content: `Pong! ${icons.WAVE}`,
+      content: `Pong! ${ICONS[IconName.WAVE]}`,
     });
     // Save channel state
     DataController.saveChannelState(channelState);
