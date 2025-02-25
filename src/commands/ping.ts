@@ -1,11 +1,11 @@
-import { ICONS } from "../constants";
+import { ICONS, PONG_RESPONSE } from "../constants";
 import { DataController } from "../controllers";
 import { ChannelCommandMessage, Command, CommandOption } from "../core";
 import { IconName } from "../enums";
 import { ChannelState } from "../saveables";
 
 export class Ping implements Command {
-  public readonly description: string = 'Responds with "Pong!".';
+  public readonly description: string = `Responds with "${PONG_RESPONSE}".`;
 
   public readonly isGlobal: boolean = false;
 
@@ -29,7 +29,7 @@ export class Ping implements Command {
     channelState.setUserNickname(message.user.id, message.member.nickname);
     // Execute command
     await message.update({
-      content: `Pong! ${ICONS[IconName.WAVE]}`,
+      content: `${PONG_RESPONSE} ${ICONS[IconName.WAVE]}`,
     });
     // Save channel state
     DataController.saveChannelState(channelState);
