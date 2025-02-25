@@ -75,7 +75,7 @@ export class Environment {
     }
     if (required) {
       Log.throw(
-        `Cannot get package.json property. Requested key was not defined.`,
+        "Cannot get package.json property. Requested key was not defined.",
         {
           packageJson,
           key,

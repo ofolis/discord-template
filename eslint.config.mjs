@@ -33,6 +33,7 @@ export default tseslint.config(
     },
     rules: {
       "@stylistic/quote-props": ["error", "as-needed"],
+      "@stylistic/quotes": ["error"],
       "@typescript-eslint/consistent-type-definitions": ["error", "type"],
       "@typescript-eslint/explicit-function-return-type": ["error"],
       "@typescript-eslint/naming-convention": [
