@@ -44,7 +44,7 @@ jobs:
         name: Create release assets
         run: |
           PROJECT_NAME="${GITHUB_REPOSITORY#*/}"
-          FILENAME="${PROJECT_NAME}-${{ steps.semantic.outputs.new_release_version }}"
+          FILENAME="${PROJECT_NAME}"
           mkdir -p release
           declare -A platforms=(
             [linux]="index-linux"
