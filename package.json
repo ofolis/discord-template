@@ -26,7 +26,7 @@
     "typescript-eslint": "^8.17.0"
   },
   "main": "dist/index.js",
-  "name": "discord-sabacc",
+  "name": "discord-template",
   "private": true,
   "scripts": {
     "build": "tsup src/index.ts && pkg dist/index.js --targets node20-linux,node20-macos,node20-win --out-path build",
