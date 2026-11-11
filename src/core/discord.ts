@@ -7,6 +7,7 @@ import {
   Log,
 } from ".";
 import { Command } from "../core";
+import { sanitizeBaseMessageOptions } from "./message-options";
 
 export class Discord {
   private static __client: discordJs.Client | null = null;
@@ -184,9 +185,13 @@ export class Discord {
     channelId: string,
     messageCreateOptions: discordJs.MessageCreateOptions,
   ): Promise<ChannelMessage> {
+    const safeMessageCreateOptions: discordJs.MessageCreateOptions =
+      sanitizeBaseMessageOptions(messageCreateOptions);
     Log.debug("Sending Discord channel message...", { channelId });
-    const channel: discordJs.TextChannel = this.__getChannel(channelId);
-    const message: discordJs.Message = await channel.send(messageCreateOptions);
+    const channel: discordJs.TextChannel = await this.__getChannel(channelId);
+    const message: discordJs.Message = await channel.send(
+      safeMessageCreateOptions,
+    );
     Log.debug("Discord message sent successfully.", { messageId: message.id });
     const channelMessage: ChannelMessage = new ChannelMessage(
       message,
@@ -238,15 +243,28 @@ export class Discord {
     Log.debug("Discord guild commands deployed successfully.");
   }
 
-  private static __getChannel(channelId: string): discordJs.TextChannel {
+  private static async __getChannel(
+    channelId: string,
+  ): Promise<discordJs.TextChannel> {
     Log.debug("Retrieving Discord channel...", { channelId });
-    const channel: discordJs.Channel | undefined =
+    let channel: discordJs.Channel | null | undefined =
       this.client.channels.cache.get(channelId);
     if (channel === undefined) {
-      Log.throw(
-        "Cannot get Discord channel. ID was not found in the channel cache.",
-        { channelId },
-      );
+      try {
+        channel = await this.client.channels.fetch(channelId);
+      } catch (reason: unknown) {
+        if (this.__isUnknownChannelError(reason)) {
+          channel = null;
+        } else {
+          Log.throw("Cannot get Discord channel. Fetch failed.", {
+            channelId,
+            error: Log.summarizeError(reason),
+          });
+        }
+      }
+    }
+    if (channel === null) {
+      Log.throw("Cannot get Discord channel. ID was not found.", { channelId });
     }
     if (channel.type !== discordJs.ChannelType.GuildText) {
       Log.throw(
@@ -259,5 +277,14 @@ export class Discord {
       channelType: channel.type,
     });
     return channel;
+  }
+
+  private static __isUnknownChannelError(reason: unknown): boolean {
+    return (
+      typeof reason === "object" &&
+      reason !== null &&
+      "code" in reason &&
+      reason.code === 10003
+    );
   }
 }

@@ -1,5 +1,6 @@
 import * as discordJs from "discord.js";
 import { Log } from "../..";
+import { sanitizeBaseMessageOptions } from "../../message-options";
 
 export abstract class Message {
   protected _buttonInteractionFilter:
@@ -70,6 +71,8 @@ export abstract class Message {
   }
 
   public async update(options: discordJs.BaseMessageOptions): Promise<void> {
+    const safeOptions: discordJs.BaseMessageOptions =
+      sanitizeBaseMessageOptions(options);
     Log.debug("Updating Discord message...");
     if (
       this._currentEntity instanceof discordJs.InteractionResponse ||
@@ -78,14 +81,14 @@ export abstract class Message {
       if (this._currentEntity instanceof discordJs.InteractionResponse) {
         this.__interactionResponseFinalizationAttempted = true;
       }
-      await this._currentEntity.edit(options);
+      await this._currentEntity.edit(safeOptions);
       if (this._currentEntity instanceof discordJs.InteractionResponse) {
         this.__interactionResponseFinalized = true;
       }
     } else if (
       this._currentEntity instanceof discordJs.MessageComponentInteraction
     ) {
-      this._currentEntity = await this._currentEntity.update(options);
+      this._currentEntity = await this._currentEntity.update(safeOptions);
     } else {
       Log.throw(
         "Cannot update message. Current entity is not an interaction response, message, or message component interaction.",
