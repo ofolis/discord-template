@@ -9,7 +9,7 @@ export class Discord {
     if (this.__client === null) {
       Log.debug("Creating Discord client...");
       this.__client = new discordJs.Client({
-        intents: ["DirectMessages", "Guilds", "GuildMessages"],
+        intents: ["Guilds"],
       });
       Log.debug("Discord client created successfully.");
     }

@@ -86,7 +86,6 @@ export class ChannelCommandMessage extends ChannelMessage {
     if (!isValidType) {
       Log.throw("Cannot get command option. Type mismatch.", {
         expectedType: type,
-        receivedData: option,
       });
     }
     return option.value as CommandOptionTypeMap[T];

@@ -33,7 +33,6 @@ export abstract class Message {
     ) {
       Log.throw(
         "Cannot await button interaction. Current entity is not an interaction response or message.",
-        { currentEntity: this._currentEntity },
       );
     }
     Log.debug("Awaiting Discord button interaction...", { timeout });
@@ -46,9 +45,7 @@ export abstract class Message {
             time: timeout,
           },
         );
-      Log.debug("Discord button interaction retrieved successfully.", {
-        buttonInteraction,
-      });
+      Log.debug("Discord button interaction retrieved successfully.");
       this._currentEntity = buttonInteraction;
       return buttonInteraction;
     } catch (result: unknown) {
@@ -61,7 +58,7 @@ export abstract class Message {
   }
 
   public async update(options: discordJs.BaseMessageOptions): Promise<void> {
-    Log.debug("Updating Discord message...", { options });
+    Log.debug("Updating Discord message...");
     if (
       this._currentEntity instanceof discordJs.InteractionResponse ||
       this._currentEntity instanceof discordJs.Message
@@ -74,7 +71,6 @@ export abstract class Message {
     } else {
       Log.throw(
         "Cannot update message. Current entity is not an interaction response, message, or message component interaction.",
-        { currentEntity: this._currentEntity },
       );
     }
     Log.debug("Discord message updated successfully.");

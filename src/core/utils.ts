@@ -13,7 +13,6 @@ export class Utils {
   public static getJsonEntry(json: Json, key: string): unknown {
     if (!(key in json)) {
       Log.throw("Cannot get JSON entry. Requested key is not defined.", {
-        json,
         key,
       });
     }

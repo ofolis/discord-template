@@ -27,7 +27,10 @@ function initializeApp(): void {
         Log.success("Discord bot is ready.");
       })
       .catch((reason: unknown) => {
-        Log.error("Failed to initialize Discord bot.", reason);
+        Log.error(
+          "Failed to initialize Discord bot.",
+          Log.summarizeError(reason),
+        );
       });
   });
 
@@ -41,9 +44,10 @@ function initializeApp(): void {
         });
       })
       .catch((reason: unknown) => {
-        Log.error("Failed to deploy Discord bot on new guild.", reason, {
+        Log.error("Failed to deploy Discord bot on new guild.", {
           guildId: guild.id,
           guildName: guild.name,
+          ...Log.summarizeError(reason),
         });
       });
   });
@@ -57,20 +61,9 @@ function initializeApp(): void {
       channelId: interaction.channelId,
       command: interaction.commandName,
       createdAt: interaction.createdAt.toUTCString(),
-      guild:
-        interaction.guild !== null
-          ? {
-              id: interaction.guild.id,
-              name: interaction.guild.name,
-            }
-          : null,
+      guildId: interaction.guild?.id ?? null,
       id: interaction.id,
-      user: {
-        displayName: interaction.user.displayName,
-        globalName: interaction.user.globalName,
-        id: interaction.user.id,
-        username: interaction.user.username,
-      },
+      userId: interaction.user.id,
     };
     Log.info(`New interaction ${interaction.id}.`, interactionInfo);
     const interactionCommand: Command | undefined = commands.find(
@@ -91,13 +84,16 @@ function initializeApp(): void {
             Log.success(`Completed interaction ${interaction.id}.`);
           })
           .catch((reason: unknown) => {
-            Log.error("Could not complete command execution.", reason);
+            Log.error(
+              "Could not complete command execution.",
+              Log.summarizeError(reason),
+            );
           });
       })
       .catch((reason: unknown) => {
         Log.error(
           "Could not create user channel interaction from command interaction.",
-          reason,
+          Log.summarizeError(reason),
         );
       });
   });
@@ -109,7 +105,7 @@ function initializeApp(): void {
       Log.debug("Discord bot logged in successfully.");
     })
     .catch((reason: unknown) => {
-      Log.error("Failed to log into Discord.", reason);
+      Log.error("Failed to log into Discord.", Log.summarizeError(reason));
     });
 }
 

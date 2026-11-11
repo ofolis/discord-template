@@ -1,11 +1,79 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Log } from "../src/core";
+import { Log, Utils } from "../src/core";
+import { ChannelState } from "../src/saveables";
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe("logging", () => {
+  it("summarizes known errors without serializing arbitrary details", () => {
+    const error: Error & {
+      code: number;
+      requestBody: { token: string };
+      status: number;
+    } = Object.assign(new Error("token=synthetic-secret"), {
+      code: 50001,
+      requestBody: { token: "synthetic-secret" },
+      status: 403,
+    });
+    error.name = "DiscordAPIError";
+
+    expect(Log.summarizeError(error)).toStrictEqual({
+      errorCode: "50001",
+      errorName: "DiscordAPIError",
+      status: "403",
+    });
+    expect(JSON.stringify(Log.summarizeError(error))).not.toContain(
+      "synthetic-secret",
+    );
+  });
+
+  it("classifies unknown thrown values without exposing their contents", () => {
+    const reason: unknown = {
+      message: "synthetic-secret",
+      payload: { token: "synthetic-secret" },
+    };
+
+    expect(Log.summarizeError(reason)).toStrictEqual({ reasonType: "object" });
+    expect(JSON.stringify(Log.summarizeError(reason))).not.toContain(
+      "synthetic-secret",
+    );
+  });
+
+  it("does not log persisted JSON when a key is missing", () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    expect(() =>
+      Utils.getJsonEntry({ existing: "synthetic-secret" }, "missing"),
+    ).toThrow("Cannot get JSON entry");
+    expect(JSON.stringify(consoleError.mock.calls)).toContain("missing");
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+      "synthetic-secret",
+    );
+  });
+
+  it("does not pass nicknames to debug diagnostics", () => {
+    const debug = vi.spyOn(Log, "debug").mockImplementation(() => {});
+    const channelState: ChannelState = new ChannelState({
+      channelId: "channel-id",
+      userStates: {
+        "user-id": { id: "user-id", nickname: null },
+      },
+    });
+
+    channelState.setUserNickname("user-id", "synthetic-nickname");
+
+    expect(debug).toHaveBeenCalledWith("Setting user nickname.", {
+      userId: "user-id",
+    });
+    expect(JSON.stringify(debug.mock.calls)).not.toContain(
+      "synthetic-nickname",
+    );
+  });
+
   it("logs severity and additional data", () => {
     const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
     const consoleError = vi

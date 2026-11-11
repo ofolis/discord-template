@@ -25,6 +25,38 @@ export class Log {
     this.__logMessage("log", "SUCCESS", "\x1b[32m", context, ...data);
   }
 
+  /**
+   * Returns safe, structured details for an unknown thrown value. Error
+   * messages and arbitrary properties are intentionally excluded because
+   * Discord and other API errors may contain request or response payloads.
+   */
+  public static summarizeError(reason: unknown): Record<string, string> {
+    if (!(reason instanceof Error)) {
+      return { reasonType: typeof reason };
+    }
+    const errorLike: Error & {
+      code?: unknown;
+      status?: unknown;
+      statusCode?: unknown;
+    } = reason;
+    const summary: Record<string, string> = {
+      errorName: this.__formatStableValue(reason.name) ?? "Error",
+    };
+    const errorCode: string | undefined = this.__formatStableValue(
+      errorLike.code,
+    );
+    const status: string | undefined = this.__formatStableValue(
+      errorLike.status ?? errorLike.statusCode,
+    );
+    if (errorCode !== undefined) {
+      summary.errorCode = errorCode;
+    }
+    if (status !== undefined) {
+      summary.status = status;
+    }
+    return summary;
+  }
+
   public static throw(
     context: string | Error,
     ...data: readonly unknown[]
@@ -39,6 +71,21 @@ export class Log {
 
   private static __formatPrefix(): string {
     return `[${new Date().toISOString()}]`;
+  }
+
+  private static __formatStableValue(value: unknown): string | undefined {
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? String(value) : undefined;
+    }
+    if (
+      typeof value !== "string" ||
+      value.length === 0 ||
+      value.length > 64 ||
+      !/^[A-Za-z0-9_.-]+$/u.test(value)
+    ) {
+      return undefined;
+    }
+    return value;
   }
 
   private static __formatUnknown(item: unknown): unknown {

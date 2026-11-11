@@ -12,12 +12,12 @@ export class IO {
     }
     const jsonString: string = fs.readFileSync(filePath, "utf8");
     const json: Json = JSON.parse(jsonString) as Json;
-    Log.debug("Data loaded successfully.", { id, json });
+    Log.debug("Data loaded successfully.", { id });
     return json;
   }
 
   public static saveData(id: string, json: Json): void {
-    Log.debug("Saving data at ID...", { id, json });
+    Log.debug("Saving data at ID...", { id });
     if (!fs.existsSync(Environment.dataPath)) {
       fs.mkdirSync(Environment.dataPath);
     }

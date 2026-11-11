@@ -40,7 +40,7 @@ export class ChannelState implements Saveable {
   }
 
   public setUserNickname(userId: string, nickname: string | null): void {
-    Log.debug("Setting user nickname.", { userId, nickname });
+    Log.debug("Setting user nickname.", { userId });
     if (userId in this.__userStates) {
       this.__userStates[userId].nickname = nickname;
     }

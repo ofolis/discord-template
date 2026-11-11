@@ -61,7 +61,6 @@ export class DirectCommandMessage extends DirectMessage {
     if (!isValidType) {
       Log.throw("Cannot get command option. Type mismatch.", {
         expectedType: type,
-        receivedData: option,
       });
     }
     return option.value as CommandOptionTypeMap[T];

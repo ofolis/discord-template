@@ -127,3 +127,18 @@ describe("Discord formatting", () => {
     ).toBe("user");
   });
 });
+
+describe("Discord client configuration", () => {
+  it("uses only the gateway intent required by the template", () => {
+    const intents = Discord.client.options.intents;
+
+    expect(intents.has(discordJs.GatewayIntentBits.Guilds)).toBe(true);
+    expect(intents.has(discordJs.GatewayIntentBits.DirectMessages)).toBe(false);
+    expect(intents.has(discordJs.GatewayIntentBits.GuildMessages)).toBe(false);
+    expect(intents.has(discordJs.GatewayIntentBits.GuildMembers)).toBe(false);
+    expect(intents.has(discordJs.GatewayIntentBits.GuildVoiceStates)).toBe(
+      false,
+    );
+    expect(intents.has(discordJs.GatewayIntentBits.MessageContent)).toBe(false);
+  });
+});
