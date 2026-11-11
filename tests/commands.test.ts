@@ -46,9 +46,36 @@ describe("command contracts", () => {
       {
         description: "A string value.",
         isRequired: false,
-        maxLength: 20,
         minLength: 1,
         name: "label",
+        type: CommandOptionType.STRING,
+      },
+      {
+        description: "A user value.",
+        isRequired: false,
+        name: "user",
+        type: CommandOptionType.USER,
+      },
+      {
+        description: "A minimum-only string.",
+        isRequired: false,
+        minLength: 0,
+        name: "minimum-only",
+        type: CommandOptionType.STRING,
+      },
+      {
+        description: "A maximum-only string.",
+        isRequired: false,
+        maxLength: 1,
+        name: "maximum-only",
+        type: CommandOptionType.STRING,
+      },
+      {
+        description: "A boundary string.",
+        isRequired: false,
+        maxLength: 6000,
+        minLength: 6000,
+        name: "boundary",
         type: CommandOptionType.STRING,
       },
     ];
@@ -118,9 +145,36 @@ describe("command contracts", () => {
       },
       {
         description: "A string value.",
-        max_length: 20,
         min_length: 1,
         name: "label",
+        required: false,
+        type: discordJs.ApplicationCommandOptionType.String,
+      },
+      {
+        description: "A user value.",
+        name: "user",
+        required: false,
+        type: discordJs.ApplicationCommandOptionType.User,
+      },
+      {
+        description: "A minimum-only string.",
+        min_length: 0,
+        name: "minimum-only",
+        required: false,
+        type: discordJs.ApplicationCommandOptionType.String,
+      },
+      {
+        description: "A maximum-only string.",
+        max_length: 1,
+        name: "maximum-only",
+        required: false,
+        type: discordJs.ApplicationCommandOptionType.String,
+      },
+      {
+        description: "A boundary string.",
+        max_length: 6000,
+        min_length: 6000,
+        name: "boundary",
         required: false,
         type: discordJs.ApplicationCommandOptionType.String,
       },
@@ -132,6 +186,40 @@ describe("command contracts", () => {
         type: discordJs.ApplicationCommandType.ChatInput,
       },
     ]);
+    put.mockRestore();
+  });
+
+  it.each([
+    ["negative minimum", { minLength: -1 }],
+    ["zero maximum", { maxLength: 0 }],
+    ["non-integer maximum", { maxLength: 1.5 }],
+    ["maximum above Discord limit", { maxLength: 6001 }],
+    ["reversed bounds", { maxLength: 1, minLength: 2 }],
+  ])("rejects string option with %s", async (_description, bounds) => {
+    const command: Command = {
+      description: "Invalid option.",
+      execute: () => Promise.resolve(),
+      isPrivate: false,
+      name: "invalid-option",
+      options: [
+        {
+          description: "Invalid string.",
+          isRequired: false,
+          name: "value",
+          type: CommandOptionType.STRING,
+          ...bounds,
+        },
+      ],
+      registrationType: CommandRegistrationType.GLOBAL,
+    };
+    const put = vi
+      .spyOn(discordJs.REST.prototype, "put")
+      .mockResolvedValue({} as never);
+
+    await expect(Discord.deployCommands([command], [])).rejects.toThrow(
+      "Invalid string option bounds",
+    );
+    expect(put).not.toHaveBeenCalled();
     put.mockRestore();
   });
 

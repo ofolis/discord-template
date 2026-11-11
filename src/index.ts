@@ -1,10 +1,10 @@
 import { Ping } from "./commands";
 import type { CoreConfig } from "./core";
 import {
-  ChannelCommandMessage,
   Command,
   Discord,
   Environment,
+  handleCommandInteraction,
   Log,
 } from "./core";
 
@@ -57,45 +57,14 @@ function initializeApp(): void {
     if (!interaction.isCommand()) {
       return;
     }
-    const interactionInfo: Record<string, unknown> = {
-      channelId: interaction.channelId,
-      command: interaction.commandName,
-      createdAt: interaction.createdAt.toUTCString(),
-      guildId: interaction.guild?.id ?? null,
-      id: interaction.id,
-      userId: interaction.user.id,
-    };
-    Log.info(`New interaction ${interaction.id}.`, interactionInfo);
-    const interactionCommand: Command | undefined = commands.find(
-      command => command.name === interaction.commandName,
-    );
-    if (interactionCommand === undefined) {
-      Log.error(
-        "Cannot handle interaction. Unknown command was provided.",
-        interactionInfo,
-      );
-      return;
-    }
-    ChannelCommandMessage.create(interaction, interactionCommand.isPrivate)
-      .then(privateChannelMessage => {
-        interactionCommand
-          .execute(privateChannelMessage)
-          .then(() => {
-            Log.success(`Completed interaction ${interaction.id}.`);
-          })
-          .catch((reason: unknown) => {
-            Log.error(
-              "Could not complete command execution.",
-              Log.summarizeError(reason),
-            );
-          });
-      })
-      .catch((reason: unknown) => {
+    void handleCommandInteraction(interaction, commands).catch(
+      (reason: unknown) => {
         Log.error(
-          "Could not create user channel interaction from command interaction.",
+          "Unexpected command interaction handling failure.",
           Log.summarizeError(reason),
         );
-      });
+      },
+    );
   });
 
   // Login

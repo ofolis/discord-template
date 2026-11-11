@@ -17,11 +17,23 @@ export abstract class Message {
     | discordJs.Message
     | discordJs.MessageComponentInteraction;
 
+  private __interactionResponseFinalizationAttempted: boolean = false;
+
+  private __interactionResponseFinalized: boolean = false;
+
   public constructor(
     currentEntity: discordJs.Message | discordJs.InteractionResponse,
   ) {
     this._currentEntity = currentEntity;
     Log.debug("Message constructed.");
+  }
+
+  public get canFinalizeInteractionResponse(): boolean {
+    return (
+      this._currentEntity instanceof discordJs.InteractionResponse &&
+      !this.__interactionResponseFinalizationAttempted &&
+      !this.__interactionResponseFinalized
+    );
   }
 
   public async awaitButtonInteraction(
@@ -63,7 +75,13 @@ export abstract class Message {
       this._currentEntity instanceof discordJs.InteractionResponse ||
       this._currentEntity instanceof discordJs.Message
     ) {
+      if (this._currentEntity instanceof discordJs.InteractionResponse) {
+        this.__interactionResponseFinalizationAttempted = true;
+      }
       await this._currentEntity.edit(options);
+      if (this._currentEntity instanceof discordJs.InteractionResponse) {
+        this.__interactionResponseFinalized = true;
+      }
     } else if (
       this._currentEntity instanceof discordJs.MessageComponentInteraction
     ) {

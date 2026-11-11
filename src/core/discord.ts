@@ -41,6 +41,26 @@ export class Discord {
           .setName(command.name)
           .setDescription(command.description);
       command.options.forEach(option => {
+        if (
+          option.type === CommandOptionType.STRING &&
+          ((option.minLength !== undefined &&
+            (!Number.isInteger(option.minLength) ||
+              option.minLength < 0 ||
+              option.minLength > 6000)) ||
+            (option.maxLength !== undefined &&
+              (!Number.isInteger(option.maxLength) ||
+                option.maxLength < 1 ||
+                option.maxLength > 6000)) ||
+            (option.minLength !== undefined &&
+              option.maxLength !== undefined &&
+              option.minLength > option.maxLength))
+        ) {
+          Log.throw("Cannot build command. Invalid string option bounds.", {
+            maxLength: option.maxLength,
+            minLength: option.minLength,
+            optionName: option.name,
+          });
+        }
         switch (option.type) {
           case CommandOptionType.BOOLEAN:
             slashCommandBuilder.addBooleanOption(booleanOption =>
@@ -71,13 +91,27 @@ export class Discord {
             );
             break;
           case CommandOptionType.STRING:
-            slashCommandBuilder.addStringOption(stringOption =>
-              stringOption
+            slashCommandBuilder.addStringOption(stringOption => {
+              const stringOptionBuilder: discordJs.SlashCommandStringOption =
+                stringOption
+                  .setName(option.name)
+                  .setDescription(option.description)
+                  .setRequired(option.isRequired);
+              if (option.minLength !== undefined) {
+                stringOptionBuilder.setMinLength(option.minLength);
+              }
+              if (option.maxLength !== undefined) {
+                stringOptionBuilder.setMaxLength(option.maxLength);
+              }
+              return stringOptionBuilder;
+            });
+            break;
+          case CommandOptionType.USER:
+            slashCommandBuilder.addUserOption(userOption =>
+              userOption
                 .setName(option.name)
                 .setDescription(option.description)
-                .setRequired(option.isRequired)
-                .setMaxLength(option.maxLength)
-                .setMinLength(option.minLength),
+                .setRequired(option.isRequired),
             );
             break;
           default:

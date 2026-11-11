@@ -3,4 +3,5 @@ export enum CommandOptionType {
   INTEGER = "INTEGER",
   NUMBER = "NUMBER",
   STRING = "STRING",
+  USER = "USER",
 }

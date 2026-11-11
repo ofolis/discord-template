@@ -1,6 +1,10 @@
 import * as discordJs from "discord.js";
 import { DirectMessage } from ".";
-import { CommandOptionType, CommandOptionTypeMap, Log } from "../..";
+import { CommandOptionType, Log } from "../..";
+import {
+  hasCommandOptionValue,
+  isCommandOptionValueValid,
+} from "./command-option-utils";
 
 export class DirectCommandMessage extends DirectMessage {
   private __commandOptions: discordJs.CommandInteractionOption[] | undefined;
@@ -19,6 +23,11 @@ export class DirectCommandMessage extends DirectMessage {
     commandInteraction: discordJs.CommandInteraction,
     isPrivate: boolean,
   ): Promise<DirectCommandMessage> {
+    if (commandInteraction.deferred || commandInteraction.replied) {
+      Log.throw(
+        "Cannot create direct command message. Interaction is already acknowledged.",
+      );
+    }
     Log.debug("Deferring command interaction...");
     const interactionResponse: discordJs.InteractionResponse =
       await commandInteraction.deferReply({ ephemeral: isPrivate });
@@ -30,10 +39,30 @@ export class DirectCommandMessage extends DirectMessage {
     );
   }
 
-  public getCommandOption<T extends CommandOptionType>(
+  public getCommandOption(
     name: string,
-    type: T,
-  ): CommandOptionTypeMap[T] | undefined {
+    type: CommandOptionType.BOOLEAN,
+  ): boolean | undefined;
+
+  public getCommandOption(
+    name: string,
+    type: CommandOptionType.INTEGER | CommandOptionType.NUMBER,
+  ): number | undefined;
+
+  public getCommandOption(
+    name: string,
+    type: CommandOptionType.STRING,
+  ): string | undefined;
+
+  public getCommandOption(
+    name: string,
+    type: CommandOptionType.USER,
+  ): discordJs.User | undefined;
+
+  public getCommandOption(
+    name: string,
+    type: CommandOptionType,
+  ): boolean | number | string | discordJs.User | undefined {
     if (this.__commandOptions === undefined) {
       Log.throw(
         "Cannot get command option. Command options have not been set.",
@@ -41,28 +70,18 @@ export class DirectCommandMessage extends DirectMessage {
     }
     const option: discordJs.CommandInteractionOption | undefined =
       this.__commandOptions.find(opt => opt.name === name);
-    if (option === undefined || option.value === undefined) {
+    if (option === undefined || !hasCommandOptionValue(option, type)) {
       // Option is intentionally undefined
       return undefined;
     }
-    const isValidType: boolean =
-      (type === CommandOptionType.BOOLEAN &&
-        option.type === discordJs.ApplicationCommandOptionType.Boolean &&
-        typeof option.value === "boolean") ||
-      (type === CommandOptionType.INTEGER &&
-        option.type === discordJs.ApplicationCommandOptionType.Integer &&
-        typeof option.value === "number") ||
-      (type === CommandOptionType.NUMBER &&
-        option.type === discordJs.ApplicationCommandOptionType.Number &&
-        typeof option.value === "number") ||
-      (type === CommandOptionType.STRING &&
-        option.type === discordJs.ApplicationCommandOptionType.String &&
-        typeof option.value === "string");
-    if (!isValidType) {
+    if (!isCommandOptionValueValid(option, type)) {
       Log.throw("Cannot get command option. Type mismatch.", {
         expectedType: type,
       });
     }
-    return option.value as CommandOptionTypeMap[T];
+    if (type === CommandOptionType.USER) {
+      return option.user;
+    }
+    return option.value;
   }
 }
