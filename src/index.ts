@@ -35,11 +35,15 @@ function initializeApp(): void {
   Discord.client.on("guildCreate", guild => {
     Discord.deployCommands(commands, [guild.id])
       .then(() => {
-        Log.success("Discord bot deployed to new guild.", { guild });
+        Log.success("Discord bot deployed to new guild.", {
+          guildId: guild.id,
+          guildName: guild.name,
+        });
       })
       .catch((reason: unknown) => {
         Log.error("Failed to deploy Discord bot on new guild.", reason, {
-          guild,
+          guildId: guild.id,
+          guildName: guild.name,
         });
       });
   });
@@ -75,7 +79,7 @@ function initializeApp(): void {
     if (interactionCommand === undefined) {
       Log.error(
         "Cannot handle interaction. Unknown command was provided.",
-        interaction,
+        interactionInfo,
       );
       return;
     }

@@ -11,9 +11,7 @@ export class Discord {
       this.__client = new discordJs.Client({
         intents: ["DirectMessages", "Guilds", "GuildMessages"],
       });
-      Log.debug("Discord client created successfully.", {
-        client: this.__client,
-      });
+      Log.debug("Discord client created successfully.");
     }
     return this.__client;
   }
@@ -22,7 +20,10 @@ export class Discord {
     commandList: Command[],
     guildIds?: string[],
   ): Promise<void> {
-    Log.debug("Deploying Discord commands...", { commandList, guildIds });
+    Log.debug("Deploying Discord commands...", {
+      commandCount: commandList.length,
+      guildIds,
+    });
     const rest: discordJs.REST = new discordJs.REST({
       version: "10",
     }).setToken(Environment.config.discordBotToken);
@@ -83,7 +84,7 @@ export class Discord {
         if (command.name in globalCommandMap) {
           Log.throw(
             "Cannot deploy global commands. Names in command list are not unique.",
-            { commandList },
+            { commandNames: commandList.map(command => command.name) },
           );
         }
         globalCommandMap[command.name] = slashCommandBuilder;
@@ -92,7 +93,7 @@ export class Discord {
         if (command.name in guildCommandMap) {
           Log.throw(
             "Cannot deploy guild commands. Names in command list are not unique.",
-            { commandList },
+            { commandNames: commandList.map(command => command.name) },
           );
         }
         guildCommandMap[command.name] = slashCommandBuilder;
@@ -137,13 +138,10 @@ export class Discord {
     channelId: string,
     messageCreateOptions: discordJs.MessageCreateOptions,
   ): Promise<ChannelMessage> {
-    Log.debug("Sending Discord channel message...", {
-      channelId,
-      messageCreateOptions,
-    });
+    Log.debug("Sending Discord channel message...", { channelId });
     const channel: discordJs.TextChannel = this.__getChannel(channelId);
     const message: discordJs.Message = await channel.send(messageCreateOptions);
-    Log.debug("Discord message sent successfully.", { message });
+    Log.debug("Discord message sent successfully.", { messageId: message.id });
     const channelMessage: ChannelMessage = new ChannelMessage(
       message,
       channelId,
@@ -155,7 +153,9 @@ export class Discord {
     rest: discordJs.REST,
     commands: discordJs.SlashCommandBuilder[],
   ): Promise<void> {
-    Log.debug("Deploying global commands to Discord...", { commands });
+    Log.debug("Deploying global commands to Discord...", {
+      commandCount: commands.length,
+    });
     await rest.put(
       discordJs.Routes.applicationCommands(
         Environment.config.discordApplicationId,
@@ -173,7 +173,7 @@ export class Discord {
     guildIds: string[],
   ): Promise<void> {
     Log.debug("Deploying commands to Discord guilds...", {
-      commands,
+      commandCount: commands.length,
       guildIds,
     });
     await Promise.all(
@@ -205,10 +205,13 @@ export class Discord {
     if (channel.type !== discordJs.ChannelType.GuildText) {
       Log.throw(
         "Cannot get Discord channel. Channel at ID was not a guild text channel.",
-        { channel },
+        { channelId, channelType: channel.type },
       );
     }
-    Log.debug("Discord channel retrieved successfully.", { channel });
+    Log.debug("Discord channel retrieved successfully.", {
+      channelId,
+      channelType: channel.type,
+    });
     return channel;
   }
 }
