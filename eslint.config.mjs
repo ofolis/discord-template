@@ -17,8 +17,9 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ["*.mjs", "eslint-rules/*.mjs"],
+          allowDefaultProject: ["*.mjs", "eslint-rules/*.mjs", "tests/*.ts"],
           defaultProject: "tsconfig.json",
+          maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 20,
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -117,6 +118,15 @@ export default tseslint.config(
       "linebreak-style": ["error", "unix"],
       "require-await": ["error"],
       "lines-between-class-members": ["error", "always"],
+    },
+  },
+  {
+    files: ["tests/**/*.ts"],
+    rules: {
+      "@typescript-eslint/naming-convention": "off",
+      "@typescript-eslint/no-dynamic-delete": "off",
+      "@typescript-eslint/typedef": "off",
+      "custom-rules/only-protected-bracket-access": "off",
     },
   },
   eslintConfigPrettier,

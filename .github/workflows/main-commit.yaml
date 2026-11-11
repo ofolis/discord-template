@@ -17,10 +17,13 @@ jobs:
         run: npm run lint
       - name: Run type checking
         run: npm run typecheck
+      - name: Run tests
+        run: npm test
       - name: Build application
         run: npm run build
 name: Main Commit
 on:
+  pull_request:
   push:
     branches:
       - main
