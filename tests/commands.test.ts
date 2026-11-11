@@ -2,7 +2,11 @@ import * as discordJs from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 import { Ping } from "../src/commands";
 import type { Command, CommandOption } from "../src/core";
-import { CommandOptionType, Discord } from "../src/core";
+import {
+  CommandOptionType,
+  CommandRegistrationType,
+  Discord,
+} from "../src/core";
 
 describe("command contracts", () => {
   it("exposes the ping command registration metadata", () => {
@@ -10,13 +14,12 @@ describe("command contracts", () => {
 
     expect(command.name).toBe("ping");
     expect(command.description).toBe('Responds with "PONG!".');
-    expect(command.isGlobal).toBe(false);
-    expect(command.isGuild).toBe(true);
     expect(command.isPrivate).toBe(true);
     expect(command.options).toStrictEqual([]);
+    expect(command.registrationType).toBe(CommandRegistrationType.GUILD);
   });
 
-  it("converts representative command options for Discord registration", async () => {
+  it("partitions commands by registration type and serializes each payload", async () => {
     const options: CommandOption[] = [
       {
         description: "A boolean value.",
@@ -49,33 +52,48 @@ describe("command contracts", () => {
         type: CommandOptionType.STRING,
       },
     ];
-    const command: Command = {
+    const globalCommand: Command = {
       description: "Option conversion test.",
       execute: () => Promise.resolve(),
-      isGlobal: true,
-      isGuild: false,
       isPrivate: false,
       name: "option-conversion",
       options,
+      registrationType: CommandRegistrationType.GLOBAL,
+    };
+    const guildCommand: Command = {
+      description: "Guild command.",
+      execute: () => Promise.resolve(),
+      isPrivate: false,
+      name: "guild-command",
+      options: [],
+      registrationType: CommandRegistrationType.GUILD,
     };
     const put = vi
       .spyOn(discordJs.REST.prototype, "put")
       .mockResolvedValue({} as never);
 
-    await Discord.deployCommands([command], []);
+    await Discord.deployCommands([globalCommand, guildCommand], ["guild-id"]);
 
-    const request = put.mock.calls[0]?.[1];
-    expect(request).toBeDefined();
-    const commandBuilders = request?.body as discordJs.SlashCommandBuilder[];
-    const body: discordJs.APIApplicationCommand[] = commandBuilders.map(
+    expect(put).toHaveBeenCalledTimes(2);
+    expect(put.mock.calls[0]?.[0]).toContain("/applications/");
+    expect(put.mock.calls[0]?.[0]).not.toContain("/guilds/");
+    expect(put.mock.calls[1]?.[0]).toContain("/guilds/guild-id/");
+    const globalBuilders = put.mock.calls[0]?.[1]
+      ?.body as discordJs.SlashCommandBuilder[];
+    const guildBuilders = put.mock.calls[1]?.[1]
+      ?.body as discordJs.SlashCommandBuilder[];
+    const globalBody: discordJs.APIApplicationCommand[] = globalBuilders.map(
       commandBuilder => commandBuilder.toJSON(),
     );
-    expect(body[0]).toMatchObject({
+    const guildBody: discordJs.APIApplicationCommand[] = guildBuilders.map(
+      commandBuilder => commandBuilder.toJSON(),
+    );
+    expect(globalBody[0]).toMatchObject({
       description: "Option conversion test.",
       name: "option-conversion",
       type: discordJs.ApplicationCommandType.ChatInput,
     });
-    expect(body[0]?.options).toMatchObject([
+    expect(globalBody[0]?.options).toMatchObject([
       {
         description: "A boolean value.",
         name: "enabled",
@@ -107,6 +125,33 @@ describe("command contracts", () => {
         type: discordJs.ApplicationCommandOptionType.String,
       },
     ]);
+    expect(guildBody).toMatchObject([
+      {
+        description: "Guild command.",
+        name: "guild-command",
+        type: discordJs.ApplicationCommandType.ChatInput,
+      },
+    ]);
+    put.mockRestore();
+  });
+
+  it("rejects an unknown registration type at runtime", async () => {
+    const command = {
+      description: "Invalid command.",
+      execute: () => Promise.resolve(),
+      isPrivate: false,
+      name: "invalid-command",
+      options: [],
+      registrationType: "both",
+    } as unknown as Command;
+    const put = vi
+      .spyOn(discordJs.REST.prototype, "put")
+      .mockResolvedValue({} as never);
+
+    await expect(Discord.deployCommands([command], [])).rejects.toThrow(
+      "Unknown registration type",
+    );
+    expect(put).not.toHaveBeenCalled();
     put.mockRestore();
   });
 });

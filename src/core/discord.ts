@@ -1,5 +1,11 @@
 import * as discordJs from "discord.js";
-import { ChannelMessage, CommandOptionType, Environment, Log } from ".";
+import {
+  ChannelMessage,
+  CommandOptionType,
+  CommandRegistrationType,
+  Environment,
+  Log,
+} from ".";
 import { Command } from "../core";
 
 export class Discord {
@@ -80,23 +86,29 @@ export class Discord {
             });
         }
       });
-      if (command.isGlobal) {
-        if (command.name in globalCommandMap) {
-          Log.throw(
-            "Cannot deploy global commands. Names in command list are not unique.",
-            { commandNames: commandList.map(command => command.name) },
-          );
-        }
-        globalCommandMap[command.name] = slashCommandBuilder;
-      }
-      if (command.isGuild) {
-        if (command.name in guildCommandMap) {
-          Log.throw(
-            "Cannot deploy guild commands. Names in command list are not unique.",
-            { commandNames: commandList.map(command => command.name) },
-          );
-        }
-        guildCommandMap[command.name] = slashCommandBuilder;
+      switch (command.registrationType) {
+        case CommandRegistrationType.GLOBAL:
+          if (command.name in globalCommandMap) {
+            Log.throw(
+              "Cannot deploy global commands. Names in command list are not unique.",
+              { commandNames: commandList.map(command => command.name) },
+            );
+          }
+          globalCommandMap[command.name] = slashCommandBuilder;
+          break;
+        case CommandRegistrationType.GUILD:
+          if (command.name in guildCommandMap) {
+            Log.throw(
+              "Cannot deploy guild commands. Names in command list are not unique.",
+              { commandNames: commandList.map(command => command.name) },
+            );
+          }
+          guildCommandMap[command.name] = slashCommandBuilder;
+          break;
+        default:
+          Log.throw("Cannot deploy command. Unknown registration type.", {
+            command,
+          });
       }
     });
     guildIds = guildIds ?? Array.from(this.client.guilds.cache.keys());
