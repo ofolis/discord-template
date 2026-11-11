@@ -15,8 +15,71 @@ describe("command contracts", () => {
     expect(command.name).toBe("ping");
     expect(command.description).toBe('Responds with "PONG!".');
     expect(command.isPrivate).toBe(true);
+    expect(command.requiredMemberPermissions).toBeUndefined();
     expect(command.options).toStrictEqual([]);
     expect(command.registrationType).toBe(CommandRegistrationType.GUILD);
+  });
+
+  it("serializes native default member permissions for global and guild commands", async () => {
+    const globalCommand: Command = {
+      requiredMemberPermissions: discordJs.PermissionFlagsBits.Administrator,
+      description: "Administrator command.",
+      execute: () => Promise.resolve(),
+      isPrivate: false,
+      name: "administrator-command",
+      options: [],
+      registrationType: CommandRegistrationType.GLOBAL,
+    };
+    const guildCommand: Command = {
+      requiredMemberPermissions: discordJs.PermissionFlagsBits.Administrator,
+      description: "Guild administrator command.",
+      execute: () => Promise.resolve(),
+      isPrivate: false,
+      name: "guild-administrator-command",
+      options: [],
+      registrationType: CommandRegistrationType.GUILD,
+    };
+    const put = vi
+      .spyOn(discordJs.REST.prototype, "put")
+      .mockResolvedValue({} as never);
+
+    await Discord.deployCommands([globalCommand, guildCommand], ["guild-id"]);
+
+    const globalBuilders = put.mock.calls[0]?.[1]
+      ?.body as discordJs.SlashCommandBuilder[];
+    const guildBuilders = put.mock.calls[1]?.[1]
+      ?.body as discordJs.SlashCommandBuilder[];
+    expect(globalBuilders[0]?.toJSON()).toMatchObject({
+      default_member_permissions: "8",
+    });
+    expect(guildBuilders[0]?.toJSON()).toMatchObject({
+      default_member_permissions: "8",
+    });
+    put.mockRestore();
+  });
+
+  it.each([
+    ["zero", 0n],
+    ["invalid type", "8"],
+  ])("rejects %s required member permissions", async (_description, value) => {
+    const command = {
+      description: "Invalid permissions.",
+      execute: () => Promise.resolve(),
+      isPrivate: false,
+      name: "invalid-permissions",
+      options: [],
+      registrationType: CommandRegistrationType.GLOBAL,
+      requiredMemberPermissions: value,
+    } as unknown as Command;
+    const put = vi
+      .spyOn(discordJs.REST.prototype, "put")
+      .mockResolvedValue({} as never);
+
+    await expect(Discord.deployCommands([command], [])).rejects.toThrow(
+      "Invalid required member permissions",
+    );
+    expect(put).not.toHaveBeenCalled();
+    put.mockRestore();
   });
 
   it("partitions commands by registration type and serializes each payload", async () => {

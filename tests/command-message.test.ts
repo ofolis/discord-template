@@ -185,19 +185,31 @@ describe("command interaction failure handling", () => {
     options: [],
     registrationType: "GUILD" as Command["registrationType"],
   };
+  const restrictedCommand: Command = {
+    ...command,
+    requiredMemberPermissions: discordJs.PermissionFlagsBits.Administrator,
+    execute: vi.fn().mockResolvedValue(undefined),
+    name: "restricted-command",
+  };
 
   const createInteraction = (states: {
+    commandName?: string;
     deferred: boolean;
+    member?: unknown;
     replied: boolean;
+    reply?: (options: discordJs.InteractionReplyOptions) => Promise<unknown>;
   }): discordJs.CommandInteraction =>
     ({
       channelId: "channel-id",
-      commandName: command.name,
+      commandName: states.commandName ?? command.name,
       createdAt: new Date("2026-11-11T17:00:00.000Z"),
       deferred: states.deferred,
-      guild: null,
+      guild: states.member === undefined ? null : { id: "guild-id" },
+      guildId: states.member === undefined ? null : "guild-id",
       id: "interaction-id",
+      member: states.member ?? null,
       replied: states.replied,
+      reply: states.reply,
       user: { id: "user-id" },
     }) as unknown as discordJs.CommandInteraction;
 
@@ -280,6 +292,179 @@ describe("command interaction failure handling", () => {
 
     expect(create).not.toHaveBeenCalled();
     create.mockRestore();
+  });
+
+  it("executes commands without permission metadata", async () => {
+    const create = vi.spyOn(ChannelCommandMessage, "create").mockResolvedValue({
+      canFinalizeInteractionResponse: false,
+    } as unknown as ChannelCommandMessage);
+    const execute = vi.spyOn(command, "execute");
+
+    await handleCommandInteraction(
+      createInteraction({ deferred: false, replied: false }),
+      [command],
+    );
+
+    expect(create).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledOnce();
+    create.mockRestore();
+    execute.mockRestore();
+  });
+
+  it.each([
+    ["Administrator permission", restrictedCommand, "8", true],
+    ["another permission only", restrictedCommand, "4", false],
+    ["missing permission information", restrictedCommand, undefined, false],
+    ["malformed permission string", restrictedCommand, "not-a-number", false],
+    [
+      "combined permissions without all bits",
+      {
+        ...restrictedCommand,
+        name: "combined-command",
+        requiredMemberPermissions:
+          discordJs.PermissionFlagsBits.ManageGuild |
+          discordJs.PermissionFlagsBits.ManageChannels,
+      },
+      String(discordJs.PermissionFlagsBits.ManageGuild),
+      false,
+    ],
+    [
+      "all combined permissions",
+      {
+        ...restrictedCommand,
+        name: "combined-command",
+        requiredMemberPermissions:
+          discordJs.PermissionFlagsBits.ManageGuild |
+          discordJs.PermissionFlagsBits.ManageChannels,
+      },
+      String(
+        discordJs.PermissionFlagsBits.ManageGuild |
+          discordJs.PermissionFlagsBits.ManageChannels,
+      ),
+      true,
+    ],
+    [
+      "Administrator override",
+      {
+        ...restrictedCommand,
+        name: "combined-command",
+        requiredMemberPermissions:
+          discordJs.PermissionFlagsBits.ManageGuild |
+          discordJs.PermissionFlagsBits.ManageChannels,
+      },
+      "8",
+      true,
+    ],
+  ])(
+    "checks authorization with %s",
+    async (_description, commandUnderTest, permission, allowed) => {
+      const reply = vi.fn().mockResolvedValue(undefined);
+      const create = vi
+        .spyOn(ChannelCommandMessage, "create")
+        .mockResolvedValue({
+          canFinalizeInteractionResponse: false,
+        } as unknown as ChannelCommandMessage);
+      const execute = vi.spyOn(commandUnderTest, "execute");
+
+      await handleCommandInteraction(
+        createInteraction({
+          deferred: false,
+          replied: false,
+          member: permission === undefined ? {} : { permissions: permission },
+          reply,
+          commandName: commandUnderTest.name,
+        }),
+        [commandUnderTest],
+      );
+
+      if (allowed) {
+        expect(create).toHaveBeenCalledOnce();
+        expect(execute).toHaveBeenCalledOnce();
+        expect(reply).not.toHaveBeenCalled();
+      } else {
+        expect(create).not.toHaveBeenCalled();
+        expect(execute).not.toHaveBeenCalled();
+        expect(reply).toHaveBeenCalledWith({
+          content: "You don't have permission to use this command.",
+          ephemeral: true,
+        });
+      }
+      create.mockRestore();
+      execute.mockClear();
+    },
+  );
+
+  it("denies restricted commands in DMs without acknowledging publicly", async () => {
+    const reply = vi.fn().mockResolvedValue(undefined);
+    const create = vi.spyOn(ChannelCommandMessage, "create");
+
+    await handleCommandInteraction(
+      createInteraction({
+        deferred: false,
+        replied: false,
+        reply,
+        commandName: restrictedCommand.name,
+      }),
+      [restrictedCommand],
+    );
+
+    expect(create).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith({
+      content: "You don't have permission to use this command.",
+      ephemeral: true,
+    });
+    create.mockRestore();
+  });
+
+  it("handles a denial reply failure without retrying acknowledgment", async () => {
+    const reply = vi.fn().mockRejectedValue(new Error("reply failed"));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await handleCommandInteraction(
+      createInteraction({
+        deferred: false,
+        replied: false,
+        member: { permissions: "0" },
+        reply,
+        commandName: restrictedCommand.name,
+      }),
+      [restrictedCommand],
+    );
+
+    expect(reply).toHaveBeenCalledOnce();
+    expect(error.mock.calls.flat().join(" ")).not.toContain("reply failed");
+    error.mockRestore();
+  });
+
+  it("rejects invalid runtime permission metadata without executing", async () => {
+    const execute = vi.fn();
+    const invalidCommand = {
+      ...command,
+      execute,
+      name: "invalid-runtime-permissions",
+      requiredMemberPermissions: { secret: "permission-value" },
+    } as unknown as Command;
+    const reply = vi.fn().mockResolvedValue(undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await handleCommandInteraction(
+      createInteraction({
+        deferred: false,
+        replied: false,
+        member: { permissions: "8" },
+        reply,
+        commandName: invalidCommand.name,
+      }),
+      [invalidCommand],
+    );
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith({
+      content: "You don't have permission to use this command.",
+      ephemeral: true,
+    });
+    expect(error.mock.calls.flat().join(" ")).not.toContain("permission-value");
+    error.mockRestore();
   });
 
   it("does not finalize when acknowledgment fails", async () => {

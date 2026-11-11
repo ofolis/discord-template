@@ -6,7 +6,7 @@ import {
   Environment,
   Log,
 } from ".";
-import { Command } from "../core";
+import { Command, resolveRequiredMemberPermissions } from "../core";
 import { sanitizeBaseMessageOptions } from "./message-options";
 
 export class Discord {
@@ -37,10 +37,17 @@ export class Discord {
     const globalCommandMap: Record<string, discordJs.SlashCommandBuilder> = {};
     const guildCommandMap: Record<string, discordJs.SlashCommandBuilder> = {};
     commandList.forEach(command => {
+      const requiredMemberPermissions: bigint | undefined =
+        resolveRequiredMemberPermissions(command);
       const slashCommandBuilder: discordJs.SlashCommandBuilder =
         new discordJs.SlashCommandBuilder()
           .setName(command.name)
           .setDescription(command.description);
+      if (requiredMemberPermissions !== undefined) {
+        slashCommandBuilder.setDefaultMemberPermissions(
+          requiredMemberPermissions,
+        );
+      }
       command.options.forEach(option => {
         if (
           option.type === CommandOptionType.STRING &&

@@ -1,10 +1,15 @@
 import * as discordJs from "discord.js";
 import { ChannelCommandMessage } from "./entities";
-import { Command } from "./entities/command";
+import { Command, resolveRequiredMemberPermissions } from "./entities/command";
 import { Log } from "./log";
 
 const commandFailureResponse: discordJs.MessageCreateOptions = {
   content: "Something went wrong while executing this command.",
+};
+
+const unauthorizedCommandResponse: discordJs.InteractionReplyOptions = {
+  content: "You don't have permission to use this command.",
+  ephemeral: true,
 };
 
 export async function handleCommandInteraction(
@@ -38,6 +43,24 @@ export async function handleCommandInteraction(
     return;
   }
 
+  let requiredMemberPermissions: bigint | undefined;
+  try {
+    requiredMemberPermissions =
+      resolveRequiredMemberPermissions(interactionCommand);
+  } catch (reason: unknown) {
+    Log.error(
+      "Cannot authorize command. Invalid permission metadata.",
+      Log.summarizeError(reason),
+    );
+    await denyCommandInteraction(interaction);
+    return;
+  }
+
+  if (!canUseCommand(interaction, requiredMemberPermissions)) {
+    await denyCommandInteraction(interaction);
+    return;
+  }
+
   let commandMessage: ChannelCommandMessage | undefined;
   try {
     commandMessage = await ChannelCommandMessage.create(
@@ -64,5 +87,52 @@ export async function handleCommandInteraction(
         );
       }
     }
+  }
+}
+
+async function denyCommandInteraction(
+  interaction: discordJs.CommandInteraction,
+): Promise<void> {
+  try {
+    await interaction.reply(unauthorizedCommandResponse);
+  } catch (reason: unknown) {
+    Log.error(
+      "Could not send command authorization denial.",
+      Log.summarizeError(reason),
+    );
+  }
+}
+
+function canUseCommand(
+  interaction: discordJs.CommandInteraction,
+  requiredMemberPermissions: bigint | undefined,
+): boolean {
+  if (requiredMemberPermissions === undefined) {
+    return true;
+  }
+  if (interaction.guildId === null || interaction.member === null) {
+    return false;
+  }
+
+  const permissions: discordJs.PermissionsBitField | null =
+    interaction.member instanceof discordJs.GuildMember
+      ? interaction.member.permissions
+      : parseInteractionMemberPermissions(interaction.member.permissions);
+  if (permissions === null) {
+    return false;
+  }
+  return permissions.has(requiredMemberPermissions);
+}
+
+function parseInteractionMemberPermissions(
+  permissions: unknown,
+): discordJs.PermissionsBitField | null {
+  if (typeof permissions !== "string" || !/^\d+$/u.test(permissions)) {
+    return null;
+  }
+  try {
+    return new discordJs.PermissionsBitField(BigInt(permissions));
+  } catch (_reason: unknown) {
+    return null;
   }
 }
