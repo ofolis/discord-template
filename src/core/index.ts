@@ -3,7 +3,10 @@ export * from "./entities";
 export * from "./enums";
 export { Environment } from "./environment";
 export { EnvironmentUtils } from "./environment-utils";
-export { handleCommandInteraction } from "./interaction-handler";
+export {
+  handleCommandInteraction,
+  isSupportedCommandInteraction,
+} from "./interaction-handler";
 export { IO } from "./io";
 export { Log } from "./log";
 export * from "./types";

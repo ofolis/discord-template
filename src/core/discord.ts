@@ -34,8 +34,10 @@ export class Discord {
     const rest: discordJs.REST = new discordJs.REST({
       version: "10",
     }).setToken(Environment.config.discordBotToken);
-    const globalCommandMap: Record<string, discordJs.SlashCommandBuilder> = {};
-    const guildCommandMap: Record<string, discordJs.SlashCommandBuilder> = {};
+    const globalCommandMap: Map<string, discordJs.SlashCommandBuilder> =
+      new Map();
+    const guildCommandMap: Map<string, discordJs.SlashCommandBuilder> =
+      new Map();
     commandList.forEach(command => {
       const requiredMemberPermissions: bigint | undefined =
         resolveRequiredMemberPermissions(command);
@@ -124,40 +126,42 @@ export class Discord {
             break;
           default:
             Log.throw("Cannot build command. Unknown command option type.", {
-              option,
+              optionName: "unknown",
+              optionType: "unknown",
             });
         }
       });
       switch (command.registrationType) {
         case CommandRegistrationType.GLOBAL:
-          if (command.name in globalCommandMap) {
+          if (globalCommandMap.has(command.name)) {
             Log.throw(
               "Cannot deploy global commands. Names in command list are not unique.",
               { commandNames: commandList.map(command => command.name) },
             );
           }
-          globalCommandMap[command.name] = slashCommandBuilder;
+          globalCommandMap.set(command.name, slashCommandBuilder);
           break;
         case CommandRegistrationType.GUILD:
-          if (command.name in guildCommandMap) {
+          if (guildCommandMap.has(command.name)) {
             Log.throw(
               "Cannot deploy guild commands. Names in command list are not unique.",
               { commandNames: commandList.map(command => command.name) },
             );
           }
-          guildCommandMap[command.name] = slashCommandBuilder;
+          guildCommandMap.set(command.name, slashCommandBuilder);
           break;
         default:
           Log.throw("Cannot deploy command. Unknown registration type.", {
-            command,
+            commandName: command.name,
+            registrationType: command.registrationType,
           });
       }
     });
     guildIds = guildIds ?? Array.from(this.client.guilds.cache.keys());
-    await this.__deployGlobalCommands(rest, Object.values(globalCommandMap));
+    await this.__deployGlobalCommands(rest, [...globalCommandMap.values()]);
     await this.__deployGuildCommands(
       rest,
-      Object.values(guildCommandMap),
+      [...guildCommandMap.values()],
       guildIds,
     );
     Log.debug("Discord commands deployed successfully.");

@@ -5,6 +5,7 @@ import {
   Discord,
   Environment,
   handleCommandInteraction,
+  isSupportedCommandInteraction,
   Log,
 } from "./core";
 
@@ -54,7 +55,7 @@ function initializeApp(): void {
 
   // Interaction Create Event
   Discord.client.on("interactionCreate", interaction => {
-    if (!interaction.isCommand()) {
+    if (!isSupportedCommandInteraction(interaction)) {
       return;
     }
     void handleCommandInteraction(interaction, commands).catch(

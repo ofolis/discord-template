@@ -4,8 +4,8 @@ import type { Command } from "../src/core";
 import {
   ChannelCommandMessage,
   CommandOptionType,
-  DirectCommandMessage,
   handleCommandInteraction,
+  isSupportedCommandInteraction,
   Message,
 } from "../src/core";
 
@@ -89,27 +89,33 @@ describe("command option retrieval", () => {
     ).toThrow("Type mismatch");
   });
 
-  it("returns undefined for absent or missing optional values", () => {
+  it("returns undefined for absent optional values", () => {
     const message = createMessage([
       {
         name: "label",
         type: discordJs.ApplicationCommandOptionType.String,
-      },
-      {
-        name: "user",
-        type: discordJs.ApplicationCommandOptionType.User,
       },
     ]);
 
     expect(message.getCommandOption("missing", CommandOptionType.STRING)).toBe(
       undefined,
     );
-    expect(message.getCommandOption("label", CommandOptionType.STRING)).toBe(
-      undefined,
-    );
-    expect(message.getCommandOption("user", CommandOptionType.USER)).toBe(
-      undefined,
-    );
+    expect(() =>
+      message.getCommandOption("label", CommandOptionType.STRING),
+    ).toThrow("Type mismatch");
+  });
+
+  it("rejects a present option with no runtime value", () => {
+    const message = createMessage([
+      {
+        name: "user",
+        type: discordJs.ApplicationCommandOptionType.User,
+      },
+    ]);
+
+    expect(() =>
+      message.getCommandOption("user", CommandOptionType.USER),
+    ).toThrow("Type mismatch");
   });
 
   it("rejects a mismatched requested type without logging the option payload", () => {
@@ -131,17 +137,36 @@ describe("command option retrieval", () => {
 });
 
 describe("command interaction acknowledgment", () => {
+  it("accepts chat-input interactions and ignores context-menu interactions", () => {
+    const chatInputInteraction = {
+      isChatInputCommand: () => true,
+    } as unknown as discordJs.Interaction;
+    const contextMenuInteraction = {
+      isChatInputCommand: () => false,
+    } as unknown as discordJs.Interaction;
+
+    expect(isSupportedCommandInteraction(chatInputInteraction)).toBe(true);
+    expect(isSupportedCommandInteraction(contextMenuInteraction)).toBe(false);
+  });
+
   it("does not defer an already acknowledged interaction", async () => {
     const deferReply = vi.fn();
     const interaction = {
+      channelId: "channel-id",
+      commandName: "test-command",
+      createdAt: new Date("2026-11-11T17:00:00.000Z"),
       deferred: true,
+      guild: { id: "guild-id" },
+      guildId: "guild-id",
+      id: "interaction-id",
+      isChatInputCommand: () => true,
+      member: { permissions: "0" },
       replied: false,
       deferReply,
+      user: { id: "user-id" },
     } as unknown as discordJs.CommandInteraction;
 
-    await expect(
-      DirectCommandMessage.create(interaction, false),
-    ).rejects.toThrow("already acknowledged");
+    await handleCommandInteraction(interaction, []);
     expect(deferReply).not.toHaveBeenCalled();
   });
 });
@@ -195,6 +220,7 @@ describe("command interaction failure handling", () => {
   const createInteraction = (states: {
     commandName?: string;
     deferred: boolean;
+    dm?: boolean;
     member?: unknown;
     replied: boolean;
     reply?: (options: discordJs.InteractionReplyOptions) => Promise<unknown>;
@@ -204,14 +230,226 @@ describe("command interaction failure handling", () => {
       commandName: states.commandName ?? command.name,
       createdAt: new Date("2026-11-11T17:00:00.000Z"),
       deferred: states.deferred,
-      guild: states.member === undefined ? null : { id: "guild-id" },
-      guildId: states.member === undefined ? null : "guild-id",
+      guild: states.dm === true ? null : { id: "guild-id" },
+      guildId: states.dm === true ? null : "guild-id",
       id: "interaction-id",
-      member: states.member ?? null,
+      isChatInputCommand: () => true,
+      member:
+        states.dm === true ? null : (states.member ?? { permissions: "0" }),
       replied: states.replied,
       reply: states.reply,
       user: { id: "user-id" },
     }) as unknown as discordJs.CommandInteraction;
+
+  it("executes with a raw API guild member", async () => {
+    const response = Object.create(
+      discordJs.InteractionResponse.prototype,
+    ) as discordJs.InteractionResponse;
+    response.edit = vi.fn().mockResolvedValue(undefined);
+    const deferReply = vi.fn().mockResolvedValue(response);
+    const execute = vi.fn(async (message: ChannelCommandMessage) => {
+      expect(message.member.nickname).toBe("Raw Nickname");
+      await message.update({ content: "done" });
+    });
+    const rawMember = {
+      nick: "Raw Nickname",
+      permissions: "0",
+      user: { id: "user-id" },
+    } as unknown as discordJs.APIInteractionGuildMember;
+    const interaction = {
+      ...createInteraction({
+        deferred: false,
+        member: rawMember,
+        replied: false,
+      }),
+      deferReply,
+      options: { data: [] },
+    } as unknown as discordJs.CommandInteraction;
+    const commandUnderTest: Command = {
+      ...command,
+      execute,
+    };
+
+    await handleCommandInteraction(interaction, [commandUnderTest]);
+
+    expect(deferReply).toHaveBeenCalledWith({ ephemeral: true });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["an omitted nickname", undefined],
+    ["a null nickname", null],
+    ["a string nickname", "Raw Nickname"],
+  ])("normalizes %s", async (_description, nick) => {
+    const response = Object.create(
+      discordJs.InteractionResponse.prototype,
+    ) as discordJs.InteractionResponse;
+    response.edit = vi.fn().mockResolvedValue(undefined);
+    const deferReply = vi.fn().mockResolvedValue(response);
+    const execute = vi.fn((message: ChannelCommandMessage) => {
+      expect(message.member.nickname).toBe(nick ?? null);
+      return Promise.resolve();
+    });
+    const rawMember = {
+      ...(nick === undefined ? {} : { nick }),
+      permissions: "0",
+      user: { id: "member-user-id" },
+    } as unknown as discordJs.APIInteractionGuildMember;
+    const interaction = {
+      ...createInteraction({
+        deferred: false,
+        member: rawMember,
+        replied: false,
+      }),
+      deferReply,
+      options: { data: [] },
+    } as unknown as discordJs.CommandInteraction;
+
+    await handleCommandInteraction(interaction, [{ ...command, execute }]);
+
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it("rejects malformed raw member data before acknowledgment", async () => {
+    const deferReply = vi.fn();
+    const execute = vi.fn();
+    const interaction = {
+      ...createInteraction({
+        deferred: false,
+        member: { nick: "Nickname", user: { id: "member-user-id" } },
+        replied: false,
+      }),
+      deferReply,
+      options: { data: [] },
+    } as unknown as discordJs.CommandInteraction;
+
+    await handleCommandInteraction(interaction, [{ ...command, execute }]);
+
+    expect(deferReply).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("executes with a Discord.js GuildMember", async () => {
+    const response = Object.create(
+      discordJs.InteractionResponse.prototype,
+    ) as discordJs.InteractionResponse;
+    response.edit = vi.fn().mockResolvedValue(undefined);
+    const deferReply = vi.fn().mockResolvedValue(response);
+    const guildMember = Object.assign(
+      Object.create(discordJs.GuildMember.prototype),
+      { nickname: "Cached Nickname" },
+    ) as discordJs.GuildMember;
+    const execute = vi.fn((message: ChannelCommandMessage) => {
+      expect(message.member.nickname).toBe("Cached Nickname");
+      return Promise.resolve();
+    });
+    const interaction = {
+      ...createInteraction({
+        deferred: false,
+        member: guildMember,
+        replied: false,
+      }),
+      deferReply,
+      options: { data: [] },
+    } as unknown as discordJs.CommandInteraction;
+    const commandUnderTest: Command = {
+      ...command,
+      execute,
+    };
+
+    await handleCommandInteraction(interaction, [commandUnderTest]);
+
+    expect(deferReply).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it("rejects unrestricted commands in DMs with an ephemeral response", async () => {
+    const reply = vi.fn().mockResolvedValue(undefined);
+    const create = vi.spyOn(ChannelCommandMessage, "create");
+    const execute = vi.spyOn(command, "execute");
+
+    await handleCommandInteraction(
+      createInteraction({ deferred: false, dm: true, replied: false, reply }),
+      [command],
+    );
+
+    expect(reply).toHaveBeenCalledWith({
+      content: "This command is only available in a server.",
+      ephemeral: true,
+    });
+    expect(create).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+    create.mockRestore();
+    execute.mockRestore();
+  });
+
+  it("responds ephemerally to an unknown chat-input command", async () => {
+    const reply = vi.fn().mockResolvedValue(undefined);
+
+    await handleCommandInteraction(
+      createInteraction({
+        commandName: "unknown-command",
+        deferred: false,
+        replied: false,
+        reply,
+      }),
+      [command],
+    );
+
+    expect(reply).toHaveBeenCalledWith({
+      content: "This command is unavailable.",
+      ephemeral: true,
+    });
+  });
+
+  it("ignores a context-menu interaction passed directly to the handler", async () => {
+    const reply = vi.fn();
+    const execute = vi.fn();
+    const interaction = {
+      ...createInteraction({ deferred: false, replied: false, reply }),
+      isChatInputCommand: () => false,
+    } as unknown as discordJs.CommandInteraction;
+
+    await handleCommandInteraction(interaction, [{ ...command, execute }]);
+
+    expect(reply).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("does not reply to an already-acknowledged unknown command", async () => {
+    const reply = vi.fn();
+
+    await handleCommandInteraction(
+      createInteraction({
+        commandName: "unknown-command",
+        deferred: true,
+        replied: false,
+        reply,
+      }),
+      [command],
+    );
+
+    expect(reply).not.toHaveBeenCalled();
+  });
+
+  it("logs a failed unknown-command acknowledgment safely", async () => {
+    const reply = vi.fn().mockRejectedValue(new Error("response failed"));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await handleCommandInteraction(
+      createInteraction({
+        commandName: "unknown-command",
+        deferred: false,
+        replied: false,
+        reply,
+      }),
+      [command],
+    );
+
+    expect(reply).toHaveBeenCalledOnce();
+    expect(error.mock.calls.flat().join(" ")).not.toContain("response failed");
+    error.mockRestore();
+  });
 
   it("finalizes a deferred interaction with a generic response", async () => {
     const update = vi.fn().mockResolvedValue(undefined);
@@ -394,13 +632,14 @@ describe("command interaction failure handling", () => {
     },
   );
 
-  it("denies restricted commands in DMs without acknowledging publicly", async () => {
+  it("rejects restricted commands in DMs without acknowledging publicly", async () => {
     const reply = vi.fn().mockResolvedValue(undefined);
     const create = vi.spyOn(ChannelCommandMessage, "create");
 
     await handleCommandInteraction(
       createInteraction({
         deferred: false,
+        dm: true,
         replied: false,
         reply,
         commandName: restrictedCommand.name,
@@ -410,7 +649,7 @@ describe("command interaction failure handling", () => {
 
     expect(create).not.toHaveBeenCalled();
     expect(reply).toHaveBeenCalledWith({
-      content: "You don't have permission to use this command.",
+      content: "This command is only available in a server.",
       ephemeral: true,
     });
     create.mockRestore();

@@ -12,10 +12,29 @@ const unauthorizedCommandResponse: discordJs.InteractionReplyOptions = {
   ephemeral: true,
 };
 
+const guildOnlyCommandResponse: discordJs.InteractionReplyOptions = {
+  content: "This command is only available in a server.",
+  ephemeral: true,
+};
+
+const unknownCommandResponse: discordJs.InteractionReplyOptions = {
+  content: "This command is unavailable.",
+  ephemeral: true,
+};
+
+export function isSupportedCommandInteraction(
+  interaction: discordJs.Interaction,
+): interaction is discordJs.ChatInputCommandInteraction {
+  return interaction.isChatInputCommand();
+}
+
 export async function handleCommandInteraction(
   interaction: discordJs.CommandInteraction,
   commands: readonly Command[],
 ): Promise<void> {
+  if (!interaction.isChatInputCommand()) {
+    return;
+  }
   const interactionInfo: Record<string, unknown> = {
     channelId: interaction.channelId,
     command: interaction.commandName,
@@ -25,20 +44,32 @@ export async function handleCommandInteraction(
     userId: interaction.user.id,
   };
   Log.info(`New interaction ${interaction.id}.`, interactionInfo);
-  const interactionCommand: Command | undefined = commands.find(
-    command => command.name === interaction.commandName,
-  );
-  if (interactionCommand === undefined) {
-    Log.error(
-      "Cannot handle interaction. Unknown command was provided.",
-      interactionInfo,
-    );
-    return;
-  }
   if (interaction.deferred || interaction.replied) {
     Log.error(
       "Cannot handle interaction. Interaction is already acknowledged.",
       { interactionId: interaction.id },
+    );
+    return;
+  }
+  const commandMap: Map<string, Command> = new Map(
+    commands.map(command => [command.name, command]),
+  );
+  const interactionCommand: Command | undefined = commandMap.get(
+    interaction.commandName,
+  );
+  if (interactionCommand === undefined) {
+    await replyToInteraction(
+      interaction,
+      unknownCommandResponse,
+      "unknown command",
+    );
+    return;
+  }
+  if (interaction.guildId === null) {
+    await replyToInteraction(
+      interaction,
+      guildOnlyCommandResponse,
+      "guild-only command",
     );
     return;
   }
@@ -93,11 +124,23 @@ export async function handleCommandInteraction(
 async function denyCommandInteraction(
   interaction: discordJs.CommandInteraction,
 ): Promise<void> {
+  await replyToInteraction(
+    interaction,
+    unauthorizedCommandResponse,
+    "command authorization denial",
+  );
+}
+
+async function replyToInteraction(
+  interaction: discordJs.CommandInteraction,
+  response: discordJs.InteractionReplyOptions,
+  operation: string,
+): Promise<void> {
   try {
-    await interaction.reply(unauthorizedCommandResponse);
+    await interaction.reply(response);
   } catch (reason: unknown) {
     Log.error(
-      "Could not send command authorization denial.",
+      `Could not send ${operation} response.`,
       Log.summarizeError(reason),
     );
   }

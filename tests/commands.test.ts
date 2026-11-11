@@ -305,6 +305,53 @@ describe("command contracts", () => {
     expect(put).not.toHaveBeenCalled();
     put.mockRestore();
   });
+
+  it("accepts prototype-property command names and rejects real duplicates", async () => {
+    const command: Command = {
+      description: "Prototype property command.",
+      execute: () => Promise.resolve(),
+      isPrivate: false,
+      name: "constructor",
+      options: [],
+      registrationType: CommandRegistrationType.GLOBAL,
+    };
+    const put = vi
+      .spyOn(discordJs.REST.prototype, "put")
+      .mockResolvedValue({} as never);
+
+    await Discord.deployCommands([command], []);
+    expect(put).toHaveBeenCalledOnce();
+
+    await expect(
+      Discord.deployCommands([command, command], []),
+    ).rejects.toThrow("Names in command list are not unique");
+    put.mockRestore();
+  });
+
+  it("does not log complete invalid command metadata", async () => {
+    const command = {
+      description: "Invalid command.",
+      execute: () => Promise.resolve(),
+      isPrivate: false,
+      name: "safe-name",
+      options: [],
+      registrationType: "invalid-registration",
+      secret: "synthetic-secret",
+    } as unknown as Command;
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const put = vi
+      .spyOn(discordJs.REST.prototype, "put")
+      .mockResolvedValue({} as never);
+
+    await expect(Discord.deployCommands([command], [])).rejects.toThrow(
+      "Unknown registration type",
+    );
+
+    expect(error.mock.calls.flat().join(" ")).not.toContain("synthetic-secret");
+    expect(error.mock.calls.flat().join(" ")).toContain("safe-name");
+    error.mockRestore();
+    put.mockRestore();
+  });
 });
 
 describe("Discord formatting", () => {

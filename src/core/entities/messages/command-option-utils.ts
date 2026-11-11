@@ -1,15 +1,6 @@
 import * as discordJs from "discord.js";
 import { CommandOptionType } from "../..";
 
-export function hasCommandOptionValue(
-  option: discordJs.CommandInteractionOption,
-  type: CommandOptionType,
-): boolean {
-  return type === CommandOptionType.USER
-    ? option.user !== undefined
-    : option.value !== undefined;
-}
-
 export function isCommandOptionValueValid(
   option: discordJs.CommandInteractionOption,
   type: CommandOptionType,
