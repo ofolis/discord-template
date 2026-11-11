@@ -1,37 +1,142 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
-import { Environment } from "../src/core";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Environment, EnvironmentUtils } from "../src/core";
 
-beforeAll(() => {
-  process.env["DEV_MODE"] = "FALSE";
-  process.env["DISCORD_APPLICATION_ID"] = "test-application-id";
-  process.env["DISCORD_BOT_TOKEN"] = "test-bot-token";
+const environmentKeys: string[] = [
+  "DEV_MODE",
+  "DISCORD_APPLICATION_ID",
+  "DISCORD_BOT_TOKEN",
+  "TEST_OPTIONAL_VALUE",
+];
+
+let originalEnvironment: Record<string, string | undefined>;
+
+beforeEach(() => {
+  originalEnvironment = Object.fromEntries(
+    environmentKeys.map(key => [key, process.env[key]]),
+  );
 });
 
-describe("environment configuration", () => {
-  it("reads present required and optional values", () => {
-    expect(Environment.config).toStrictEqual({
+afterEach(() => {
+  environmentKeys.forEach(key => {
+    const value: string | undefined = originalEnvironment[key];
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  });
+  vi.restoreAllMocks();
+});
+
+describe("environment utilities", () => {
+  it.each([undefined, "", "   "])(
+    "rejects a missing or blank required value: %j",
+    value => {
+      if (value === undefined) {
+        delete process.env["TEST_OPTIONAL_VALUE"];
+      } else {
+        process.env["TEST_OPTIONAL_VALUE"] = value;
+      }
+
+      expect(() =>
+        EnvironmentUtils.getRequiredEnvVariable("TEST_OPTIONAL_VALUE"),
+      ).toThrow(/TEST_OPTIONAL_VALUE/);
+      expect(() =>
+        EnvironmentUtils.getRequiredEnvVariable("TEST_OPTIONAL_VALUE"),
+      ).not.toThrow(/secret|token/i);
+    },
+  );
+
+  it("returns a valid required value without trimming meaningful whitespace", () => {
+    process.env["TEST_OPTIONAL_VALUE"] = "  value with padding  ";
+
+    expect(EnvironmentUtils.getRequiredEnvVariable("TEST_OPTIONAL_VALUE")).toBe(
+      "  value with padding  ",
+    );
+  });
+
+  it("returns undefined for an absent optional value", () => {
+    delete process.env["TEST_OPTIONAL_VALUE"];
+
+    expect(
+      EnvironmentUtils.getOptionalEnvVariable("TEST_OPTIONAL_VALUE"),
+    ).toBeUndefined();
+  });
+
+  it("returns a present optional value unchanged", () => {
+    process.env["TEST_OPTIONAL_VALUE"] = "  optional value  ";
+
+    expect(EnvironmentUtils.getOptionalEnvVariable("TEST_OPTIONAL_VALUE")).toBe(
+      "  optional value  ",
+    );
+  });
+
+  it("returns an explicit default for an absent optional value", () => {
+    delete process.env["TEST_OPTIONAL_VALUE"];
+
+    expect(
+      EnvironmentUtils.getOptionalEnvVariable(
+        "TEST_OPTIONAL_VALUE",
+        "documented default",
+      ),
+    ).toBe("documented default");
+  });
+
+  it("parses the optional development-mode flag with a false default", () => {
+    delete process.env["DEV_MODE"];
+    expect(EnvironmentUtils.getOptionalBoolean("DEV_MODE")).toBe(false);
+
+    process.env["DEV_MODE"] = "TrUe";
+    expect(EnvironmentUtils.getOptionalBoolean("DEV_MODE")).toBe(true);
+  });
+
+  it("rejects invalid boolean configuration", () => {
+    process.env["DEV_MODE"] = "enabled";
+
+    expect(() => EnvironmentUtils.getOptionalBoolean("DEV_MODE")).toThrow(
+      /DEV_MODE/,
+    );
+  });
+});
+
+describe("core environment configuration", () => {
+  it("loads only core configuration with safe defaults", () => {
+    process.env["DEV_MODE"] = "FALSE";
+    process.env["DISCORD_APPLICATION_ID"] = "test-application-id";
+    process.env["DISCORD_BOT_TOKEN"] = "test-bot-token";
+
+    expect(Environment.loadConfig()).toStrictEqual({
       devMode: false,
       discordApplicationId: "test-application-id",
       discordBotToken: "test-bot-token",
     });
   });
 
-  it("throws when a required value is missing without printing fixture data", async () => {
+  it("does not expose credential values in validation failures", async () => {
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});
-    delete process.env["DISCORD_BOT_TOKEN"];
+    process.env["DISCORD_BOT_TOKEN"] = "synthetic-secret-token";
+    delete process.env["DISCORD_APPLICATION_ID"];
     vi.resetModules();
 
     const { Environment: isolatedEnvironment } = await import(
       "../src/core/environment"
     );
 
-    expect(() => isolatedEnvironment.config).toThrow(
-      "Cannot get environment variable. Requested key was not defined.",
+    let validationError: unknown;
+    try {
+      isolatedEnvironment.loadConfig();
+    } catch (error) {
+      validationError = error;
+    }
+    expect(validationError).toBeInstanceOf(Error);
+    expect((validationError as Error).message).toContain(
+      'Configuration value "DISCORD_APPLICATION_ID" is required',
     );
-    expect(consoleError).toHaveBeenCalled();
-    consoleError.mockRestore();
-    process.env["DISCORD_BOT_TOKEN"] = "test-bot-token";
+    expect(consoleError).not.toHaveBeenCalled();
+    expect((validationError as Error).message).not.toContain(
+      "synthetic-secret-token",
+    );
   });
 });

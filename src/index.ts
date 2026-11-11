@@ -1,4 +1,5 @@
 import { Ping } from "./commands";
+import type { CoreConfig } from "./core";
 import {
   ChannelCommandMessage,
   Command,
@@ -10,7 +11,9 @@ import {
 const commands: Command[] = [new Ping()];
 
 function initializeApp(): void {
-  if (Environment.config.devMode) {
+  const config: CoreConfig = Environment.loadConfig();
+
+  if (config.devMode) {
     Log.info("Running in development mode.");
   }
   Log.info(
@@ -97,7 +100,7 @@ function initializeApp(): void {
 
   // Login
   Discord.client
-    .login(Environment.config.discordBotToken)
+    .login(config.discordBotToken)
     .then(() => {
       Log.debug("Discord bot logged in successfully.");
     })

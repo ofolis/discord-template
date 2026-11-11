@@ -1,6 +1,6 @@
 # discord-template
 
-This is my command-oriented Discord bot template. It is a deeply opinionated TypeScript Node.js project that can be run using Node or built into a binary distribution (bundled and released using GitHub actions).
+This is my command-oriented Discord bot template. It is a deeply opinionated TypeScript Node.js project that can be run using Node and released using GitHub actions.
 
 Because I am using this template for my own Discord bot projects, it will be updated as those projects mature and are refined.
 
@@ -22,10 +22,7 @@ Because I am using this template for my own Discord bot projects, it will be upd
 6. In the **Bot** section:
    1. Set any desired aesthetic items.
    2. Reset the token and **save the value for later**.
-   3. Enable privileged gateway intents:
-      - **Presence Intent**
-      - **Server Memebers Intent**
-      - **Message Content Intent**
+   3. Leave privileged gateway intents disabled; the template does not use them.
 7. Back in the **OAuth2** section:
    1. Create a guild install OAuth2 URL with only the `bot` scope.
 8. Open the generated URL and install the bot in your Discord server.
@@ -57,8 +54,9 @@ Because I am using this template for my own Discord bot projects, it will be upd
 3. Run `npm install`.
 4. Make a copy of `.env.example` named `.env`.
 5. Modify the `.env` file.
-   1. Replace the `?` after `DISCORD_APPLICATION_ID=` with the value noted earlier.
-   2. Replace the `?` after `DISCORD_BOT_TOKEN=` with the value noted earlier.
+   1. Set `DISCORD_APPLICATION_ID` to the value noted earlier.
+   2. Set `DISCORD_BOT_TOKEN` to the value noted earlier.
+   3. Leave `DEV_MODE=false` unless verbose development logging is desired.
 6. Set up VSCode (if applicable).
    1. Install required plugins:
       - **ESLint**

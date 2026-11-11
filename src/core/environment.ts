@@ -1,11 +1,11 @@
-import dotenv from "dotenv";
 import { MersenneTwister19937, Random } from "random-js";
 import * as packageJson from "../../package.json";
 import { Log } from "../core";
-import type { Config, PackageContext } from "./types";
+import { EnvironmentUtils } from "./environment-utils";
+import type { CoreConfig, PackageContext } from "./types";
 
 export class Environment {
-  private static __config: Config | null = null;
+  private static __config: CoreConfig | null = null;
 
   private static __packageContext: PackageContext | null = null;
 
@@ -13,20 +13,8 @@ export class Environment {
     MersenneTwister19937.autoSeed(),
   );
 
-  public static get config(): Config {
-    if (this.__config === null) {
-      dotenv.config();
-      this.__config = {
-        devMode:
-          this.__getEnvVariable("DEV_MODE", false).toUpperCase() === "TRUE",
-        discordApplicationId: this.__getEnvVariable(
-          "DISCORD_APPLICATION_ID",
-          true,
-        ),
-        discordBotToken: this.__getEnvVariable("DISCORD_BOT_TOKEN", true),
-      };
-    }
-    return this.__config;
+  public static get config(): CoreConfig {
+    return this.loadConfig();
   }
 
   public static get dataPath(): string {
@@ -49,21 +37,18 @@ export class Environment {
     return this.__random;
   }
 
-  private static __getEnvVariable(key: string, required: boolean): string {
-    const value: string | undefined = process.env[key];
-    if (value === undefined) {
-      if (!required) {
-        return "";
-      }
-      Log.throw(
-        "Cannot get environment variable. Requested key was not defined.",
-        {
-          env: process.env,
-          key,
-        },
-      );
+  public static loadConfig(): CoreConfig {
+    if (this.__config === null) {
+      this.__config = {
+        devMode: EnvironmentUtils.getOptionalBoolean("DEV_MODE"),
+        discordApplicationId: EnvironmentUtils.getRequiredEnvVariable(
+          "DISCORD_APPLICATION_ID",
+        ),
+        discordBotToken:
+          EnvironmentUtils.getRequiredEnvVariable("DISCORD_BOT_TOKEN"),
+      };
     }
-    return value;
+    return this.__config;
   }
 
   private static __getPackageJsonProperty(
