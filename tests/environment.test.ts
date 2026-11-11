@@ -1,8 +1,10 @@
+import { resolve } from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Environment, EnvironmentUtils } from "../src/core";
 
 const environmentKeys: string[] = [
   "DEV_MODE",
+  "DATA_DIRECTORY",
   "DISCORD_APPLICATION_ID",
   "DISCORD_BOT_TOKEN",
   "TEST_OPTIONAL_VALUE",
@@ -104,13 +106,31 @@ describe("core environment configuration", () => {
     process.env["DEV_MODE"] = "FALSE";
     process.env["DISCORD_APPLICATION_ID"] = "test-application-id";
     process.env["DISCORD_BOT_TOKEN"] = "test-bot-token";
+    delete process.env["DATA_DIRECTORY"];
 
-    expect(Environment.loadConfig()).toStrictEqual({
+    const config = Environment.loadConfig();
+    expect(config.dataDirectory).toMatch(/data$/u);
+    expect(config).toMatchObject({
       devMode: false,
       discordApplicationId: "test-application-id",
       discordBotToken: "test-bot-token",
     });
   });
+
+  it.each(["./configured-data", resolve("/tmp/discord-template-data")])(
+    "resolves DATA_DIRECTORY %j to an absolute path",
+    async configuredDirectory => {
+      process.env["DATA_DIRECTORY"] = configuredDirectory;
+      vi.resetModules();
+      const { Environment: isolatedEnvironment } = await import(
+        "../src/core/environment"
+      );
+
+      expect(isolatedEnvironment.loadConfig().dataDirectory).toBe(
+        resolve(configuredDirectory),
+      );
+    },
+  );
 
   it("does not expose credential values in validation failures", async () => {
     const consoleError = vi

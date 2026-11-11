@@ -1,3 +1,4 @@
+import { resolve } from "path";
 import { MersenneTwister19937, Random } from "random-js";
 import * as packageJson from "../../package.json";
 import { Log } from "../core";
@@ -15,10 +16,6 @@ export class Environment {
 
   public static get config(): CoreConfig {
     return this.loadConfig();
-  }
-
-  public static get dataPath(): string {
-    return `${process.cwd()}/data`;
   }
 
   public static get packageContext(): PackageContext {
@@ -40,6 +37,7 @@ export class Environment {
   public static loadConfig(): CoreConfig {
     if (this.__config === null) {
       this.__config = {
+        dataDirectory: this.__getDataDirectory(),
         devMode: EnvironmentUtils.getOptionalBoolean("DEV_MODE"),
         discordApplicationId: EnvironmentUtils.getRequiredEnvVariable(
           "DISCORD_APPLICATION_ID",
@@ -49,6 +47,20 @@ export class Environment {
       };
     }
     return this.__config;
+  }
+
+  private static __getDataDirectory(): string {
+    const configuredDirectory: string =
+      EnvironmentUtils.getOptionalEnvVariable("DATA_DIRECTORY", "./data") ?? "";
+    if (
+      configuredDirectory.trim().length === 0 ||
+      configuredDirectory.includes("\0")
+    ) {
+      throw new Error(
+        'Configuration value "DATA_DIRECTORY" must be a valid non-empty path.',
+      );
+    }
+    return resolve(configuredDirectory);
   }
 
   private static __getPackageJsonProperty(

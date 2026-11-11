@@ -1,4 +1,5 @@
 import { Ping } from "./commands";
+import { DataController } from "./controllers";
 import type { CoreConfig } from "./core";
 import {
   Command,
@@ -6,13 +7,16 @@ import {
   Environment,
   handleCommandInteraction,
   isSupportedCommandInteraction,
+  JsonStore,
   Log,
+  reportStartupFailure,
 } from "./core";
 
-const commands: Command[] = [new Ping()];
-
-function initializeApp(): void {
+async function initializeApp(): Promise<void> {
   const config: CoreConfig = Environment.loadConfig();
+  const jsonStore: JsonStore = new JsonStore(config.dataDirectory);
+  await jsonStore.initialize();
+  const commands: Command[] = [new Ping(new DataController(jsonStore))];
 
   if (config.devMode) {
     Log.info("Running in development mode.");
@@ -79,4 +83,7 @@ function initializeApp(): void {
     });
 }
 
-initializeApp();
+void initializeApp().catch((reason: unknown) => {
+  reportStartupFailure(reason);
+  process.exitCode = 1;
+});

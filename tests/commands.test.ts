@@ -1,16 +1,18 @@
 import * as discordJs from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 import { Ping } from "../src/commands";
+import { DataController } from "../src/controllers";
 import type { Command, CommandOption } from "../src/core";
 import {
   CommandOptionType,
   CommandRegistrationType,
   Discord,
+  JsonStore,
 } from "../src/core";
 
 describe("command contracts", () => {
   it("exposes the ping command registration metadata", () => {
-    const command: Ping = new Ping();
+    const command: Ping = new Ping(new DataController(new JsonStore("unused")));
 
     expect(command.name).toBe("ping");
     expect(command.description).toBe('Responds with "PONG!".');

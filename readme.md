@@ -48,7 +48,8 @@ Gateway intents, OAuth2 scopes, and bot permissions are separate controls. This 
    1. Set `DISCORD_APPLICATION_ID` to the value noted earlier.
    2. Set `DISCORD_BOT_TOKEN` to the value noted earlier.
    3. Leave `DEV_MODE=false` unless verbose development logging is desired.
-   4. Treat `.env` and the Discord token as sensitive. Keep local environment files out of Git, never paste tokens into issues or logs, and rotate a token immediately if it is exposed.
+   4. Optionally set `DATA_DIRECTORY` to the application data directory. It defaults to `./data` relative to the process working directory and is resolved to an absolute path at startup.
+   5. Treat `.env` and the Discord token as sensitive. Keep local environment files out of Git, never paste tokens into issues or logs, and rotate a token immediately if it is exposed.
 6. Set up VSCode (if applicable).
    1. Install required plugins:
       - **ESLint**
@@ -71,6 +72,8 @@ Gateway intents, OAuth2 scopes, and bot permissions are separate controls. This 
 ## Security and dependency maintenance
 
 - Keep `DISCORD_BOT_TOKEN` and other credentials only in local `.env` files or the deployment environment. `.env.example` contains names and placeholders only and is safe to track.
+- JSON persistence uses the configured `DATA_DIRECTORY`; storage keys may contain only ASCII letters, numbers, underscores, and hyphens, and each key maps to one `<key>.json` file.
+- A `JsonStore.update()` callback must not call `read()`, `write()`, or `update()` for the same key; same-key reentry is rejected, while cross-key operations remain allowed. Generic TypeScript return types do not validate stored domain schemas; domain consumers perform that validation.
 - Keep diagnostic logging limited to identifiers and operational metadata. Do not log tokens, environment objects, Discord payloads, interaction options, message content, or persisted user data.
 - The CI workflow reports separate production and all-dependency `npm audit` results without failing solely on an existing advisory. Review high and critical production findings promptly, confirm whether vulnerable code is reachable, and update dependencies deliberately with the lockfile and tests.
 - Additional OAuth2 scopes, bot permissions, or gateway intents should be enabled only when an application feature requires them.

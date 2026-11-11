@@ -1,14 +1,7 @@
+export type JsonPrimitive = boolean | null | number | string;
+
+export type JsonValue = JsonPrimitive | Json | JsonValue[];
+
 export type Json = {
-  [key: string]:
-    | boolean
-    | boolean[]
-    | number
-    | number[]
-    | string
-    | string[]
-    | Json
-    | Json[]
-    | Json[][]
-    | null
-    | undefined;
+  [key: string]: JsonValue;
 };

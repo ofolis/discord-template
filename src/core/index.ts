@@ -7,7 +7,16 @@ export {
   handleCommandInteraction,
   isSupportedCommandInteraction,
 } from "./interaction-handler";
-export { IO } from "./io";
+export {
+  CorruptJsonError,
+  InvalidDomainStateError,
+  InvalidJsonValueError,
+  InvalidStorageKeyError,
+  JsonStore,
+  ReentrantStorageOperationError,
+  StorageOperationError,
+} from "./json-store";
 export { Log } from "./log";
+export { reportStartupFailure } from "./startup-diagnostics";
 export * from "./types";
 export { Utils } from "./utils";

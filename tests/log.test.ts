@@ -57,7 +57,7 @@ describe("logging", () => {
 
   it("does not pass nicknames to debug diagnostics", () => {
     const debug = vi.spyOn(Log, "debug").mockImplementation(() => {});
-    const channelState: ChannelState = new ChannelState({
+    const channelState: ChannelState = ChannelState.fromJson({
       channelId: "channel-id",
       userStates: {
         "user-id": { id: "user-id", nickname: null },
