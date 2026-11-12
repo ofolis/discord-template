@@ -102,6 +102,29 @@ describe("ApplicationLifecycle", () => {
     expect(lifecycle.activeRegistrationCount).toBe(0);
   });
 
+  it("treats initial deployment rejection as a startup failure", async () => {
+    const client = new FakeClient();
+    const deployment = createDeferred<undefined>();
+    const deployCommands = vi.fn(() => deployment.promise);
+    const lifecycle = createLifecycle(client, undefined, deployCommands);
+    const starting: Promise<void> = lifecycle.start();
+
+    await Promise.resolve();
+    client.emit("ready", client);
+    expect(deployCommands).toHaveBeenCalledOnce();
+    expect(lifecycle.activeRegistrationCount).toBe(1);
+    const startupFailure = expect(starting).rejects.toThrow(
+      "synthetic initial deployment failure",
+    );
+    deployment.reject(new Error("synthetic initial deployment failure"));
+
+    await startupFailure;
+    expect(lifecycle.state).toBe("stopped");
+    expect(client.destroy).toHaveBeenCalledOnce();
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+  });
+
   it("tracks accepted command work and drains it before persistence and client destruction", async () => {
     const client = new FakeClient();
     const reply = createDeferred<unknown>();
@@ -211,6 +234,65 @@ describe("ApplicationLifecycle", () => {
     expect(lifecycle.state).toBe("stopped");
     expect(client.destroy).toHaveBeenCalledOnce();
     login.resolve("late-token");
+  });
+
+  it("observes late readiness rejection while shutdown is draining", async () => {
+    const client = new FakeClient();
+    const login = createDeferred<string>();
+    const drain = createDeferred<undefined>();
+    const drainStarted = createDeferred<undefined>();
+    const store = {
+      initialize: (): Promise<void> => Promise.resolve(),
+      drain: vi.fn((): Promise<void> => {
+        drainStarted.resolve(undefined);
+        return drain.promise;
+      }),
+    };
+    const deployCommands = vi.fn(() => Promise.resolve());
+    client.login.mockReturnValue(login.promise);
+    const lifecycle = createLifecycle(client, store, deployCommands);
+    const unhandledReasons: unknown[] = [];
+    const observeUnhandledRejection = (reason: unknown): void => {
+      unhandledReasons.push(reason);
+    };
+    process.on("unhandledRejection", observeUnhandledRejection);
+
+    let stopping: Promise<void> | undefined;
+    let starting: Promise<void> | undefined;
+    try {
+      starting = lifecycle.start();
+      await Promise.resolve();
+      expect(client.login).toHaveBeenCalledOnce();
+
+      stopping = lifecycle.shutdown();
+      expect(lifecycle.shutdown()).toBe(stopping);
+      await drainStarted.promise;
+      expect(lifecycle.state).toBe("stopping");
+
+      client.emit("ready", client);
+      await new Promise<void>(resolve => {
+        setImmediate(resolve);
+      });
+
+      expect(unhandledReasons).toStrictEqual([]);
+      expect(deployCommands).not.toHaveBeenCalled();
+      expect(lifecycle.state).toBe("stopping");
+
+      drain.resolve(undefined);
+      await stopping;
+      await starting;
+
+      expect(lifecycle.state).toBe("stopped");
+      expect(store.drain).toHaveBeenCalledOnce();
+      expect(client.destroy).toHaveBeenCalledOnce();
+      expect(process.exitCode).toBeUndefined();
+    } finally {
+      process.off("unhandledRejection", observeUnhandledRejection);
+      drain.resolve(undefined);
+      await stopping;
+      await starting;
+      login.resolve("late-token");
+    }
   });
 
   it("sets a failure status when active work exceeds the shutdown deadline", async () => {

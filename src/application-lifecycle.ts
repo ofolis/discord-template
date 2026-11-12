@@ -285,6 +285,7 @@ export class ApplicationLifecycle {
       };
       client.once("ready", this.__readyListener);
     });
+    void this.__initialDeploymentPromise.catch(() => undefined);
 
     this.__guildCreateListener = (guild): void => {
       if (this.__state !== "running") {
