@@ -1,6 +1,13 @@
 permissions:
   contents: read
 
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_call:
+
 jobs:
   main-ci:
     name: Main CI
@@ -32,9 +39,5 @@ jobs:
         run: npm test
       - name: Build application
         run: npm run build
+
 name: Main Commit
-on:
-  pull_request:
-  push:
-    branches:
-      - main

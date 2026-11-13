@@ -35,6 +35,7 @@ Gateway intents, OAuth2 scopes, and bot permissions are separate controls. This 
 1. Create a new repository using this as the template.
 2. Enable the actions and reusable workflows trusted by your organization.
 3. Keep workflow permissions at the minimum required level. The validation workflow uses a read-only `contents` token and does not require repository secrets.
+4. During W6 initialization, set the repository variable `RELEASE_ENABLED=true` and create the valid `.release/initialization.json` marker. Until both are present, the release workflow remains inactive; validation still runs.
 
 ### 3. Set Up The Application
 
@@ -77,6 +78,10 @@ docker compose up --build
 The Compose example stores JSON data in the named `app-data` volume mounted at `/app/data`. The container runs as the official Node `node` user and does not publish a port. A bind mount may be used instead, but its host directory must be writable by the container's non-root UID/GID; Docker cannot repair arbitrary bind-mount ownership at startup.
 
 Release automation can supply `APP_VERSION` and `APP_COMMIT_SHA` as Docker build arguments. They become OCI image labels and runtime environment variables. Local builds use `development` and `unknown` fallbacks. The template does not derive metadata from Git or publish images.
+
+See [the release contract](docs/release-contract.md) for implementing-repository publication, exact image naming, release ordering, permissions, and partial-release recovery.
+
+If a release is partially published, use the release workflow's explicit `recovery_version` manual dispatch from `main`; ordinary semantic-release retries are not treated as recovery.
 
 > [!NOTE]
 > Any commits on `main` that you push to GitHub will trigger the validation action. Pull requests are validated with the same checks.
