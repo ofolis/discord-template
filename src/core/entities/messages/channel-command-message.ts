@@ -37,7 +37,7 @@ export class ChannelCommandMessage extends ChannelMessage {
   }
 
   public static async create(
-    commandInteraction: discordJs.CommandInteraction,
+    commandInteraction: discordJs.ChatInputCommandInteraction,
     isPrivate: boolean,
   ): Promise<ChannelCommandMessage> {
     if (commandInteraction.deferred || commandInteraction.replied) {

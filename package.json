@@ -1,9 +1,14 @@
 {
   "author": "Josh Jones",
   "dependencies": {
-    "discord.js": "^14.16.3",
+    "discord.js": "^14.28.1",
     "dotenv": "^16.4.5",
     "random-js": "^2.1.0"
+  },
+  "overrides": {
+    "@sapphire/shapeshift": {
+      "lodash": "4.18.1"
+    }
   },
   "description": "A Discord bot template.",
   "devDependencies": {
