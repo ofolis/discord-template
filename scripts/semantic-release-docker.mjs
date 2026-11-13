@@ -96,6 +96,12 @@ export function verifyImage(version, commitSha, expectedDigest) {
   }
 }
 
+export function pullAndVerifyImage(version, commitSha, expectedDigest) {
+  const image = imageReference(version);
+  runInherit("docker", ["pull", image]);
+  verifyImage(version, commitSha, expectedDigest);
+}
+
 async function registryManifestRequest(repository, tag, headers = {}) {
   const url = `https://${registry}/v2/${repository}/manifests/${encodeURIComponent(tag)}`;
   const response = await fetch(url, { headers, redirect: "error" });
@@ -258,8 +264,7 @@ export async function publishImage(version, commitSha, logger = console) {
   const remote = await inspectRemoteImage(version);
 
   if (remote.exists) {
-    runInherit("docker", ["pull", image]);
-    verifyImage(version, commitSha, remote.digest);
+    pullAndVerifyImage(version, commitSha, remote.digest);
     logger.log(`Verified existing GHCR image ${image}; no overwrite performed`);
     return remote;
   }
@@ -269,8 +274,7 @@ export async function publishImage(version, commitSha, logger = console) {
   if (!published.exists) {
     throw new Error(`GHCR image was not found after pushing ${image}`);
   }
-  runInherit("docker", ["pull", image]);
-  verifyImage(version, commitSha, published.digest);
+  pullAndVerifyImage(version, commitSha, published.digest);
   return published;
 }
 

@@ -2,11 +2,12 @@
 /* eslint-disable @typescript-eslint/naming-convention, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return */
 
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import {
   buildImage,
   inspectRemoteImage,
   publishImage,
-  verifyImage,
+  pullAndVerifyImage,
 } from "./semantic-release-docker.mjs";
 
 const versionPattern =
@@ -110,7 +111,7 @@ async function reconcileRelease(tag, commitSha) {
   return "existing";
 }
 
-async function recover() {
+export async function recover() {
   const version = process.env.RECOVERY_VERSION?.trim();
   if (!version || !versionPattern.test(version)) {
     throw new Error("RECOVERY_VERSION must be a valid semantic version");
@@ -119,7 +120,7 @@ async function recover() {
   const commitSha = verifyTaggedCommit(tag, "origin/main");
   const image = await inspectRemoteImage(version);
   if (image.exists) {
-    verifyImage(version, commitSha, image.digest);
+    pullAndVerifyImage(version, commitSha, image.digest);
     console.log(`Verified existing image ${image.reference} (${image.digest})`);
   } else {
     buildImage(version, commitSha);
@@ -130,9 +131,11 @@ async function recover() {
   console.log(`Recovery complete for ${tag} at ${commitSha}: ${releaseState}`);
 }
 
-try {
-  await recover();
-} catch (error) {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    await recover();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  }
 }

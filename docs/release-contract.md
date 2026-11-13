@@ -147,12 +147,14 @@ Recovery is an explicit manual dispatch with `recovery_version`, for example
    checks out the exact tagged commit detached.
 4. Uses that tag's commit as `APP_COMMIT_SHA`; it never calculates a version or
    creates a tag.
-5. Inspects the GHCR manifest. A missing image is rebuilt and pushed; an
-   existing image is pulled and checked for version, commit, platform, and
-   digest identity. Mismatches fail without overwrite.
+5. Inspects the GHCR manifest. A missing image is rebuilt from the checked-out
+   historical tag with that tag's version and commit, then pushed and verified.
+   An existing image is pulled onto the fresh runner and checked for version,
+   commit, platform, OCI labels, runtime metadata, and the inspected remote
+   digest. Mismatches fail without rebuild or overwrite.
 6. Checks the GitHub Release for the exact tag. A missing release is created
    with GitHub's `generate_release_notes` mechanism; an existing matching
-   release is reused, and conflicting state fails.
+   release is preserved and reused, and conflicting state fails.
 
 Recovery is idempotent when all artifacts agree. It is serialized by the
 `release-main` concurrency group. The registry check is fail-closed for
