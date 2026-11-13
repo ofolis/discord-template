@@ -5,6 +5,7 @@ import {
   cpSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -27,7 +28,7 @@ function fixture(): string {
   for (const file of [
     "package.json",
     "package-lock.json",
-    "readme.md",
+    "README.md",
     "Dockerfile",
     "compose.yaml",
   ]) {
@@ -141,7 +142,7 @@ describe("repository initialization", () => {
     const marker = JSON.parse(
       readFileSync(join(cwd, ".release/initialization.json"), "utf8"),
     );
-    const readme = readFileSync(join(cwd, "readme.md"), "utf8");
+    const readme = readFileSync(join(cwd, "README.md"), "utf8");
     expect(packageJson).toMatchObject({
       name: "example-bot",
       description: "A bot for testing.",
@@ -157,7 +158,8 @@ describe("repository initialization", () => {
     expect(readme).toContain("# Example Bot\n\nA bot for testing.");
     expect(readme).not.toContain("## Projects Using This");
     expect(readme).toContain("does not enable releases");
-    expect(readme).toContain("Discord developer portal");
+    expect(readme).toContain("Discord Developer Portal");
+    expect(readdirSync(cwd)).not.toContain("readme.md");
     expect(readFileSync(join(cwd, "Dockerfile"), "utf8")).toBe(
       readFileSync(join(repositoryRoot, "Dockerfile"), "utf8"),
     );
@@ -220,8 +222,8 @@ describe("repository initialization", () => {
   it("refuses dirty or partially initialized repositories", async () => {
     const dirty = fixture();
     writeFileSync(
-      join(dirty, "readme.md"),
-      `${readFileSync(join(dirty, "readme.md"), "utf8")}\nLocal change\n`,
+      join(dirty, "README.md"),
+      `${readFileSync(join(dirty, "README.md"), "utf8")}\nLocal change\n`,
     );
     await expect(
       initializeRepository({ cwd: dirty, argv: args() }),

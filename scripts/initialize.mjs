@@ -17,8 +17,8 @@ const TEMPLATE_HASHES = {
     "fcc571c0d65706f2c07d235cfd3d36d71a21426b977a73ed2c261315b5d27fcb",
   "package-lock.json":
     "965e37ea4abd17b9eb5e67327b38a9e81088a3ca624c6ca4f0d10c5924d5133b",
-  "readme.md":
-    "c318054f811afba3086697eb8f970c7c1e6594f6a14108d17f6462e412cc9bd4",
+  "README.md":
+    "795557e8739a00331d072390d05230c40cdf88947b0a90f9fd260f81c716b285",
 };
 
 function fail(message) {
@@ -118,12 +118,7 @@ function transformReadme(readme, applicationName, description) {
   if (setupIndex < 0 || projectsIndex < 0 || projectsIndex < setupIndex) {
     fail("Template README does not have the expected structure");
   }
-  const setup = readme
-    .slice(setupIndex, projectsIndex)
-    .replace(
-      /During W6 initialization, set the repository variable `RELEASE_ENABLED=true` and create the valid `\.release\/initialization\.json` marker\. Until both are present, the release workflow remains inactive; validation still runs\./,
-      "The initializer creates the application identity marker but does not enable releases. Keep `RELEASE_ENABLED` unset until repository release setup is complete; validation still runs while release activation remains disabled.",
-    );
+  const setup = readme.slice(setupIndex, projectsIndex);
   const intro = `# ${applicationName}\n\n${description}\n\nThis application originated from the reusable discord-template foundation. It is a TypeScript Node.js Discord bot project that can be run using Node and released using GitHub Actions.\n\n`;
   return `${intro}${setup.trimEnd()}\n`;
 }
@@ -132,7 +127,7 @@ async function readProjectFiles(cwd) {
   const paths = {
     package: join(cwd, "package.json"),
     lockfile: join(cwd, "package-lock.json"),
-    readme: join(cwd, "readme.md"),
+    readme: join(cwd, "README.md"),
     marker: join(cwd, ".release", "initialization.json"),
   };
   const [packageContents, lockContents, readmeContents] = await Promise.all([
