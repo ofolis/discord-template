@@ -11,7 +11,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   initializeRepository,
@@ -20,11 +21,25 @@ import {
 } from "../scripts/initialize.mjs";
 
 const repositoryRoot = process.cwd();
+const testDirectory = dirname(fileURLToPath(import.meta.url));
+// These snapshots are the authoritative pristine inputs for the initializer's
+// fixed template fingerprints. They must not come from the repository running
+// the tests, which may already be initialized.
+const pristineTemplateRoot = join(
+  testDirectory,
+  "fixtures",
+  "pristine-template",
+);
 const fixtures: string[] = [];
 
 function fixture(): string {
   const cwd = mkdtempSync(join(tmpdir(), "discord-template-init-"));
   fixtures.push(cwd);
+  const identityFiles = new Set([
+    "package.json",
+    "package-lock.json",
+    "README.md",
+  ]);
   for (const file of [
     "package.json",
     "package-lock.json",
@@ -32,7 +47,10 @@ function fixture(): string {
     "Dockerfile",
     "compose.yaml",
   ]) {
-    cpSync(join(repositoryRoot, file), join(cwd, file));
+    const sourceRoot = identityFiles.has(file)
+      ? pristineTemplateRoot
+      : repositoryRoot;
+    cpSync(join(sourceRoot, file), join(cwd, file));
   }
   cpSync(join(repositoryRoot, ".github"), join(cwd, ".github"), {
     recursive: true,
