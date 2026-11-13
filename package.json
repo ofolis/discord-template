@@ -39,6 +39,7 @@
     "build": "tsc",
     "dev": "tsx watch src/index.ts 2>&1 | tee console.log",
     "format": "prettier . --write",
+    "init": "node scripts/initialize.mjs",
     "lint": "prettier . --list-different && eslint",
     "start": "node dist/index.js",
     "test": "vitest run",

@@ -4,6 +4,16 @@ This is my command-oriented Discord bot template. It is a deeply opinionated Typ
 
 Because I am using this template for my own Discord bot projects, it will be updated as those projects mature and are refined.
 
+## Initialize a repository created from this template
+
+After creating a repository with GitHub's **Use this template** feature, run the initializer from the clean repository checkout:
+
+```sh
+npm run init -- --package-name <npm-package-name> --application-name <application-name> [--description <description>]
+```
+
+The package name and application name are required; the description defaults to `A Discord bot application.`. The initializer updates only application identity, does not request Discord credentials, and leaves release activation disabled.
+
 ## Setup
 
 ### 1. Create The Discord Bot
