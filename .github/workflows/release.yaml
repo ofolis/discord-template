@@ -41,7 +41,7 @@ jobs:
       - name: Setup NodeJS
         uses: actions/setup-node@v4
         with:
-          node-version: 24.10
+          node-version: "24.10"
       - id: activation
         name: Inspect activation authorization
         shell: bash
@@ -81,7 +81,7 @@ jobs:
       - name: Setup NodeJS
         uses: actions/setup-node@v4
         with:
-          node-version: 24.10
+          node-version: "24.10"
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
