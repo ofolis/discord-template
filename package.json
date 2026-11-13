@@ -43,6 +43,7 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "validate:release-activation": "node scripts/validate-release-activation.mjs",
     "prepare": "husky"
   }
 }

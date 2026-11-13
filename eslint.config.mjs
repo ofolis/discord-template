@@ -17,7 +17,12 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ["*.mjs", "eslint-rules/*.mjs", "tests/*.ts"],
+          allowDefaultProject: [
+            "*.mjs",
+            "eslint-rules/*.mjs",
+            "scripts/*.mjs",
+            "tests/*.ts",
+          ],
           defaultProject: "tsconfig.json",
           maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 20,
         },
@@ -127,6 +132,24 @@ export default tseslint.config(
       "@typescript-eslint/no-dynamic-delete": "off",
       "@typescript-eslint/typedef": "off",
       "custom-rules/only-protected-bracket-access": "off",
+    },
+  },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly",
+      },
+    },
+    rules: {
+      "@typescript-eslint/explicit-function-return-type": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/restrict-template-expressions": "off",
+      "@typescript-eslint/strict-boolean-expressions": "off",
+      "@typescript-eslint/typedef": "off",
     },
   },
   eslintConfigPrettier,
