@@ -66,6 +66,18 @@ Gateway intents, OAuth2 scopes, and bot permissions are separate controls. This 
 2. The bot will now run and refresh as you make code changes.
 3. Make code updates and commit your changes using [the Conventional Commits format](https://www.conventionalcommits.org/en/v1.0.0/).
 
+### Docker
+
+Build and run the template locally with Docker Compose after setting the Discord configuration in an untracked `.env` file or the shell environment:
+
+```sh
+docker compose up --build
+```
+
+The Compose example stores JSON data in the named `app-data` volume mounted at `/app/data`. The container runs as the official Node `node` user and does not publish a port. A bind mount may be used instead, but its host directory must be writable by the container's non-root UID/GID; Docker cannot repair arbitrary bind-mount ownership at startup.
+
+Release automation can supply `APP_VERSION` and `APP_COMMIT_SHA` as Docker build arguments. They become OCI image labels and runtime environment variables. Local builds use `development` and `unknown` fallbacks. The template does not derive metadata from Git or publish images.
+
 > [!NOTE]
 > Any commits on `main` that you push to GitHub will trigger the validation action. Pull requests are validated with the same checks.
 

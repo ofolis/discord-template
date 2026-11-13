@@ -7,6 +7,8 @@ const environmentKeys: string[] = [
   "DATA_DIRECTORY",
   "DISCORD_APPLICATION_ID",
   "DISCORD_BOT_TOKEN",
+  "APP_VERSION",
+  "APP_COMMIT_SHA",
   "TEST_OPTIONAL_VALUE",
 ];
 
@@ -102,6 +104,21 @@ describe("environment utilities", () => {
 });
 
 describe("core environment configuration", () => {
+  it("uses externally supplied release metadata", async () => {
+    process.env["APP_VERSION"] = "1.2.3";
+    process.env["APP_COMMIT_SHA"] = "abc123";
+    vi.resetModules();
+
+    const { Environment: isolatedEnvironment } = await import(
+      "../src/core/environment"
+    );
+
+    expect(isolatedEnvironment.packageContext).toMatchObject({
+      version: "1.2.3",
+      commitSha: "abc123",
+    });
+  });
+
   it("loads only core configuration with safe defaults", () => {
     process.env["DEV_MODE"] = "FALSE";
     process.env["DISCORD_APPLICATION_ID"] = "test-application-id";

@@ -144,7 +144,7 @@ export class ApplicationLifecycle {
         Log.info("Running in development mode.");
       }
       Log.info(
-        `Initializing ${Environment.packageContext.name} (${Environment.packageContext.version ?? "NO VERSION"})...`,
+        `Initializing ${Environment.packageContext.name} (${Environment.packageContext.version ?? "DEVELOPMENT"}, ${Environment.packageContext.commitSha ?? "NO COMMIT SHA"})...`,
       );
 
       this.__store = this.__createStore(config.dataDirectory);

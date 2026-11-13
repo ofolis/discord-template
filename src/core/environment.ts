@@ -22,9 +22,14 @@ export class Environment {
     if (this.__packageContext === null) {
       this.__packageContext = {
         name: this.__getPackageJsonProperty("name", true) as string,
-        version: this.__getPackageJsonProperty("version", false) as
-          | string
-          | undefined,
+        version:
+          EnvironmentUtils.getOptionalEnvVariable("APP_VERSION") ??
+          (this.__getPackageJsonProperty("version", false) as
+            | string
+            | undefined),
+        commitSha:
+          EnvironmentUtils.getOptionalEnvVariable("APP_COMMIT_SHA") ??
+          undefined,
       };
     }
     return this.__packageContext;

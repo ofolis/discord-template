@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-development}
+        APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
+    environment:
+      DEV_MODE: ${DEV_MODE:-false}
+      DATA_DIRECTORY: /app/data
+      DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:?Set DISCORD_APPLICATION_ID in the environment or an untracked .env file}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:?Set DISCORD_BOT_TOKEN in the environment or an untracked .env file}
+    restart: unless-stopped
+    stop_grace_period: 15s
+    volumes:
+      - app-data:/app/data
+
+volumes:
+  app-data:
