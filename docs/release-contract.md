@@ -29,7 +29,8 @@ npm install --prefix "$RUNNER_TEMP/semantic-release" --no-save \
   semantic-release@25.0.9 \
   @semantic-release/commit-analyzer@13.0.1 \
   @semantic-release/release-notes-generator@14.1.1 \
-  @semantic-release/github@12.0.11
+  @semantic-release/github@12.0.11 \
+  conventional-changelog-conventionalcommits@7.0.2
 ```
 
 The installed binary resolves `.releaserc.json` from the repository checkout
@@ -155,6 +156,7 @@ npx --yes \
   --package @semantic-release/commit-analyzer@13.0.1 \
   --package @semantic-release/release-notes-generator@14.1.1 \
   --package @semantic-release/github@12.0.11 \
+  --package conventional-changelog-conventionalcommits@7.0.2 \
   semantic-release --dry-run --no-ci
 ```
 
