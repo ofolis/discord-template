@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-base-to-string, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call */
 
 import { execFileSync } from "child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +11,17 @@ const validator = join(
   process.cwd(),
   "scripts/validate-release-activation.mjs",
 );
+const releaseWorkflow = readFileSync(
+  join(process.cwd(), ".github/workflows/release.yaml"),
+  "utf8",
+);
+
+function workflowJob(name: string): string {
+  const match = releaseWorkflow.match(
+    new RegExp(`\\n  ${name}:[\\s\\S]*?(?=\\n  [a-z-]+:|$)`, "u"),
+  );
+  return match?.[0] ?? "";
+}
 
 function runValidator(
   releaseEnabled: string,
@@ -43,6 +54,25 @@ function runValidator(
 }
 
 describe("release activation contract", () => {
+  it("keeps release permissions scoped to the gated publish job", () => {
+    expect(releaseWorkflow).toMatch(
+      /permissions:\n {2}contents: read\n\nconcurrency:/u,
+    );
+    expect(workflowJob("validation")).toContain(
+      "    permissions:\n      contents: read",
+    );
+    expect(workflowJob("activation")).not.toContain("permissions:");
+    expect(workflowJob("publish")).toContain(
+      "    permissions:\n      contents: write\n      issues: write\n      packages: write\n      pull-requests: write",
+    );
+    expect(workflowJob("validation")).not.toMatch(
+      /issues: write|pull-requests: write/u,
+    );
+    expect(workflowJob("activation")).not.toMatch(
+      /issues: write|pull-requests: write/u,
+    );
+  });
+
   it("remains inactive when RELEASE_ENABLED is not true", () => {
     const result = runValidator("false", "/missing/marker.json");
 

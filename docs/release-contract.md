@@ -40,6 +40,24 @@ fixture invocation.
 The exact top-level pins make the release toolchain auditable and repeatable;
 future toolchain updates must reassess the complete transient dependency graph.
 
+The release workflow keeps the token permissions at job scope. The validation
+and activation jobs retain `contents: read`; only the gated `publish` job has
+the permissions needed to publish artifacts:
+
+| Permission             | Purpose                                                                                                  |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- |
+| `contents: write`      | Create the semantic-release tag and GitHub Release.                                                      |
+| `packages: write`      | Push the exact semantic-version image tag to GHCR.                                                       |
+| `issues: write`        | Let `@semantic-release/github@12.0.11` inspect and notify released issues, and manage its failure issue. |
+| `pull-requests: write` | Let the GitHub plugin inspect and notify released pull requests.                                         |
+
+The last two permissions are required for the plugin's release notification
+hooks even when the GitHub Release itself has already been published. The
+plugin may query the repository's Issues API during its success hook; disabling
+comments is not a substitute for granting the documented notification
+permissions. `GITHUB_TOKEN` remains sufficient; no personal access token is
+required.
+
 The local `scripts/semantic-release-docker.mjs` plugin is loaded by
 semantic-release from the checkout. It uses `nextRelease.version` and
 `nextRelease.gitHead`; it does not calculate a version independently. The
