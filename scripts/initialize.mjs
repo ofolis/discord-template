@@ -18,7 +18,7 @@ const TEMPLATE_HASHES = {
   "package-lock.json":
     "965e37ea4abd17b9eb5e67327b38a9e81088a3ca624c6ca4f0d10c5924d5133b",
   "README.md":
-    "795557e8739a00331d072390d05230c40cdf88947b0a90f9fd260f81c716b285",
+    "98e6064a0c690f4a9621d7a41f90ade4622c5ab47f7a539c2f461222b5801149",
 };
 
 function fail(message) {
@@ -114,11 +114,10 @@ function hash(contents) {
 function transformReadme(readme, applicationName, description) {
   const setupHeading = "## Setup";
   const setupIndex = readme.indexOf(setupHeading);
-  const projectsIndex = readme.indexOf("## Projects Using This");
-  if (setupIndex < 0 || projectsIndex < 0 || projectsIndex < setupIndex) {
+  if (setupIndex < 0) {
     fail("Template README does not have the expected structure");
   }
-  const setup = readme.slice(setupIndex, projectsIndex);
+  const setup = readme.slice(setupIndex);
   const intro = `# ${applicationName}\n\n${description}\n\nThis application originated from the reusable discord-template foundation. It is a TypeScript Node.js Discord bot project that can be run using Node and released using GitHub Actions.\n\n`;
   return `${intro}${setup.trimEnd()}\n`;
 }

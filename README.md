@@ -93,8 +93,3 @@ If publication is interrupted, use the release workflow's explicit `recovery_ver
 JSON persistence uses `DATA_DIRECTORY`. Storage keys may contain only ASCII letters, numbers, underscores, and hyphens, and each key maps to one `<key>.json` file. A `JsonStore.update()` callback must not re-enter `read()`, `write()`, or `update()` for the same key.
 
 Keep diagnostic logging limited to identifiers and operational metadata. Do not log tokens, environment objects, Discord payloads, interaction options, message content, or persisted user data.
-
-## Projects Using This
-
-- [discord-sabacc](https://github.com/ofolis/discord-sabacc)
-- [discord-mariokart](https://github.com/ofolis/discord-mariokart)
