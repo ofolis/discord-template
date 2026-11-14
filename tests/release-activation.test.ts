@@ -71,6 +71,12 @@ describe("release activation contract", () => {
     expect(workflowJob("activation")).not.toMatch(
       /issues: write|pull-requests: write/u,
     );
+    expect(workflowJob("publish")).toContain(
+      '"$RUNNER_TEMP/semantic-release/node_modules/.bin/semantic-release"',
+    );
+    expect(workflowJob("publish")).toContain(
+      "run: node scripts/recover-release.mjs",
+    );
   });
 
   it("remains inactive when RELEASE_ENABLED is not true", () => {
@@ -87,10 +93,26 @@ describe("release activation contract", () => {
     expect(result.output).toContain("RELEASE_ALLOWED=false");
   });
 
-  it("rejects an empty or malformed initialization marker", () => {
+  it.each([
+    ["missing fields", {}],
+    ["invalid schema version", { schemaVersion: 2, applicationName: "bot" }],
+    ["non-string application name", { schemaVersion: 1, applicationName: 7 }],
+    [
+      "whitespace-only application name",
+      { schemaVersion: 1, applicationName: " \t\n " },
+    ],
+    ["embedded newline", { schemaVersion: 1, applicationName: "bot\nname" }],
+    ["carriage return", { schemaVersion: 1, applicationName: "bot\rname" }],
+    ["tab", { schemaVersion: 1, applicationName: "bot\tname" }],
+    [
+      "other control character",
+      { schemaVersion: 1, applicationName: "bot\u0000name" },
+    ],
+    ["overlong name", { schemaVersion: 1, applicationName: "b".repeat(101) }],
+  ])("rejects a %s initialization marker", (_description, marker) => {
     const directory = mkdtempSync(join(tmpdir(), "release-activation-"));
     const markerPath = join(directory, "initialization.json");
-    writeFileSync(markerPath, JSON.stringify({}));
+    writeFileSync(markerPath, JSON.stringify(marker));
 
     try {
       const result = runValidator("true", markerPath);
@@ -102,24 +124,60 @@ describe("release activation contract", () => {
     }
   });
 
-  it("allows activation only with a valid W6 initialization marker", () => {
+  it.each(["false", "TRUE", "1", " true ", ""])(
+    "does not activate unless RELEASE_ENABLED is exactly true: %s",
+    releaseEnabled => {
+      const result = runValidator(releaseEnabled, "/missing/marker.json");
+
+      expect(result.status).toBe(0);
+      expect(result.output).toContain("RELEASE_ALLOWED=false");
+    },
+  );
+
+  it("does not emit application-name output for an invalid marker", () => {
     const directory = mkdtempSync(join(tmpdir(), "release-activation-"));
     const markerPath = join(directory, "initialization.json");
     writeFileSync(
       markerPath,
-      JSON.stringify({ schemaVersion: 1, applicationName: "example-bot" }),
+      JSON.stringify({
+        schemaVersion: 1,
+        applicationName: "bot\nINJECTED=true",
+      }),
     );
 
     try {
       const result = runValidator("true", markerPath);
 
-      expect(result.status).toBe(0);
-      expect(result.output).toContain("RELEASE_ALLOWED=true");
-      expect(result.output).toContain("APPLICATION_NAME=example-bot");
+      expect(result.status).toBe(1);
+      expect(result.output).toContain("RELEASE_ALLOWED=false");
+      expect(result.output).not.toContain("APPLICATION_NAME=");
+      expect(result.output).not.toContain("INJECTED=true");
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  it.each(["example-bot", "Example Bot", "Café Bot"])(
+    "allows activation with a valid application name: %s",
+    applicationName => {
+      const directory = mkdtempSync(join(tmpdir(), "release-activation-"));
+      const markerPath = join(directory, "initialization.json");
+      writeFileSync(
+        markerPath,
+        JSON.stringify({ schemaVersion: 1, applicationName }),
+      );
+
+      try {
+        const result = runValidator("true", markerPath);
+
+        expect(result.status).toBe(0);
+        expect(result.output).toContain("RELEASE_ALLOWED=true");
+        expect(result.output).toContain(`APPLICATION_NAME=${applicationName}`);
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 const validChallenge =

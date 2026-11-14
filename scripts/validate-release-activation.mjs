@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { isValidApplicationName } from "./application-name.mjs";
 
 const markerPath =
   process.env.RELEASE_INITIALIZATION_MARKER ?? ".release/initialization.json";
@@ -8,8 +9,7 @@ function isValidMarker(marker) {
     marker !== null &&
     typeof marker === "object" &&
     marker.schemaVersion === 1 &&
-    typeof marker.applicationName === "string" &&
-    marker.applicationName.trim().length > 0
+    isValidApplicationName(marker.applicationName)
   );
 }
 
@@ -29,7 +29,7 @@ async function validateActivation() {
 
   if (!isValidMarker(marker)) {
     throw new Error(
-      `Release initialization marker is invalid: ${markerPath} (expected schemaVersion 1 and a non-empty applicationName)`,
+      `Release initialization marker is invalid: ${markerPath} (expected schemaVersion 1 and a valid applicationName)`,
     );
   }
 

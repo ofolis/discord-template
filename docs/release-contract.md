@@ -41,6 +41,8 @@ The last two permissions are required for the plugin's release notification hook
 
 The local `scripts/semantic-release-docker.mjs` plugin is loaded by semantic-release from the checkout. It uses `nextRelease.version` and `nextRelease.gitHead`; it does not calculate a version independently. The plugin builds the `linux/amd64` image with those values and checks its OCI labels and runtime environment before the image can be pushed.
 
+The Dockerfile pins `node:24-bookworm-slim` by digest in both build stages. The pinned digest identifies the same multi-platform base-image manifest index; the release build's existing `linux/amd64` platform selection resolves the amd64 child manifest. This improves repeatability and historical reconstruction, but does not guarantee byte-identical builds. Security fixes and Node patch updates require a deliberate digest change, followed by the normal CI and container-build validation. No automated dependency-update schedule is implied.
+
 ## Activation
 
 The release workflow may publish only when both conditions are true:

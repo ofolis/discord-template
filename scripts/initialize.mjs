@@ -5,12 +5,15 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
+import {
+  isValidApplicationName,
+  MAX_APPLICATION_NAME_LENGTH,
+} from "./application-name.mjs";
 
 const execFileAsync = promisify(execFile);
 const TEMPLATE_PACKAGE_NAME = "discord-template";
 const DEFAULT_DESCRIPTION = "A Discord bot application.";
 const MAX_PACKAGE_NAME_LENGTH = 214;
-const MAX_APPLICATION_NAME_LENGTH = 100;
 const MAX_DESCRIPTION_LENGTH = 500;
 const TEMPLATE_HASHES = {
   "package.json":
@@ -38,6 +41,25 @@ function validateText(value, label, maxLength, required = true) {
   }
   if (/\p{Cc}/u.test(value)) {
     fail(`${label} must not contain control characters`);
+  }
+  return trimmed;
+}
+
+function validateApplicationName(value) {
+  if (typeof value !== "string") {
+    fail("Application name is required");
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    fail("Application name must not be empty");
+  }
+  if (trimmed.length > MAX_APPLICATION_NAME_LENGTH) {
+    fail(
+      `Application name must be ${MAX_APPLICATION_NAME_LENGTH} characters or fewer`,
+    );
+  }
+  if (!isValidApplicationName(value)) {
+    fail("Application name must not contain control characters");
   }
   return trimmed;
 }
@@ -81,11 +103,7 @@ function parseArguments(argv) {
   }
   return {
     packageName: validatePackageName(values.get("--package-name")),
-    applicationName: validateText(
-      values.get("--application-name"),
-      "Application name",
-      MAX_APPLICATION_NAME_LENGTH,
-    ),
+    applicationName: validateApplicationName(values.get("--application-name")),
     description: values.has("--description")
       ? validateText(
           values.get("--description"),
