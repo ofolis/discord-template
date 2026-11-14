@@ -1,5 +1,6 @@
 import * as discordJs from "discord.js";
 import { Log } from "../..";
+import { sanitizeBaseMessageOptions } from "../../message-options";
 
 export abstract class Message {
   protected _buttonInteractionFilter:
@@ -17,11 +18,23 @@ export abstract class Message {
     | discordJs.Message
     | discordJs.MessageComponentInteraction;
 
+  private __interactionResponseFinalizationAttempted: boolean = false;
+
+  private __interactionResponseFinalized: boolean = false;
+
   public constructor(
     currentEntity: discordJs.Message | discordJs.InteractionResponse,
   ) {
     this._currentEntity = currentEntity;
     Log.debug("Message constructed.");
+  }
+
+  public get canFinalizeInteractionResponse(): boolean {
+    return (
+      this._currentEntity instanceof discordJs.InteractionResponse &&
+      !this.__interactionResponseFinalizationAttempted &&
+      !this.__interactionResponseFinalized
+    );
   }
 
   public async awaitButtonInteraction(
@@ -33,7 +46,6 @@ export abstract class Message {
     ) {
       Log.throw(
         "Cannot await button interaction. Current entity is not an interaction response or message.",
-        { currentEntity: this._currentEntity },
       );
     }
     Log.debug("Awaiting Discord button interaction...", { timeout });
@@ -46,9 +58,7 @@ export abstract class Message {
             time: timeout,
           },
         );
-      Log.debug("Discord button interaction retrieved successfully.", {
-        buttonInteraction,
-      });
+      Log.debug("Discord button interaction retrieved successfully.");
       this._currentEntity = buttonInteraction;
       return buttonInteraction;
     } catch (result: unknown) {
@@ -61,20 +71,27 @@ export abstract class Message {
   }
 
   public async update(options: discordJs.BaseMessageOptions): Promise<void> {
-    Log.debug("Updating Discord message...", { options });
+    const safeOptions: discordJs.BaseMessageOptions =
+      sanitizeBaseMessageOptions(options);
+    Log.debug("Updating Discord message...");
     if (
       this._currentEntity instanceof discordJs.InteractionResponse ||
       this._currentEntity instanceof discordJs.Message
     ) {
-      await this._currentEntity.edit(options);
+      if (this._currentEntity instanceof discordJs.InteractionResponse) {
+        this.__interactionResponseFinalizationAttempted = true;
+      }
+      await this._currentEntity.edit(safeOptions);
+      if (this._currentEntity instanceof discordJs.InteractionResponse) {
+        this.__interactionResponseFinalized = true;
+      }
     } else if (
       this._currentEntity instanceof discordJs.MessageComponentInteraction
     ) {
-      this._currentEntity = await this._currentEntity.update(options);
+      this._currentEntity = await this._currentEntity.update(safeOptions);
     } else {
       Log.throw(
         "Cannot update message. Current entity is not an interaction response, message, or message component interaction.",
-        { currentEntity: this._currentEntity },
       );
     }
     Log.debug("Discord message updated successfully.");

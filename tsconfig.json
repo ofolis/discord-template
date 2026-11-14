@@ -3,7 +3,7 @@
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "forceConsistentCasingInFileNames": true,
-    "module": "ESNext",
+    "module": "CommonJS",
     "moduleResolution": "node",
     "noImplicitAny": true,
     "noImplicitReturns": true,
@@ -16,7 +16,7 @@
     "skipLibCheck": true,
     "strict": true,
     "strictNullChecks": true,
-    "target": "ESNext",
+    "target": "ES2022",
     "useUnknownInCatchVariables": true
   },
   "include": ["*.mjs", "eslint-rules/*.mjs", "src/**/*.ts"]

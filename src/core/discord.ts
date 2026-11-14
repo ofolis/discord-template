@@ -1,6 +1,13 @@
 import * as discordJs from "discord.js";
-import { ChannelMessage, CommandOptionType, Environment, Log } from ".";
-import { Command } from "../core";
+import {
+  ChannelMessage,
+  CommandOptionType,
+  CommandRegistrationType,
+  Environment,
+  Log,
+} from ".";
+import { Command, resolveRequiredMemberPermissions } from "../core";
+import { sanitizeBaseMessageOptions } from "./message-options";
 
 export class Discord {
   private static __client: discordJs.Client | null = null;
@@ -9,11 +16,9 @@ export class Discord {
     if (this.__client === null) {
       Log.debug("Creating Discord client...");
       this.__client = new discordJs.Client({
-        intents: ["DirectMessages", "Guilds", "GuildMessages"],
+        intents: ["Guilds"],
       });
-      Log.debug("Discord client created successfully.", {
-        client: this.__client,
-      });
+      Log.debug("Discord client created successfully.");
     }
     return this.__client;
   }
@@ -22,18 +27,50 @@ export class Discord {
     commandList: Command[],
     guildIds?: string[],
   ): Promise<void> {
-    Log.debug("Deploying Discord commands...", { commandList, guildIds });
+    Log.debug("Deploying Discord commands...", {
+      commandCount: commandList.length,
+      guildIds,
+    });
     const rest: discordJs.REST = new discordJs.REST({
       version: "10",
     }).setToken(Environment.config.discordBotToken);
-    const globalCommandMap: Record<string, discordJs.SlashCommandBuilder> = {};
-    const guildCommandMap: Record<string, discordJs.SlashCommandBuilder> = {};
+    const globalCommandMap: Map<string, discordJs.SlashCommandBuilder> =
+      new Map();
+    const guildCommandMap: Map<string, discordJs.SlashCommandBuilder> =
+      new Map();
     commandList.forEach(command => {
+      const requiredMemberPermissions: bigint | undefined =
+        resolveRequiredMemberPermissions(command);
       const slashCommandBuilder: discordJs.SlashCommandBuilder =
         new discordJs.SlashCommandBuilder()
           .setName(command.name)
           .setDescription(command.description);
+      if (requiredMemberPermissions !== undefined) {
+        slashCommandBuilder.setDefaultMemberPermissions(
+          requiredMemberPermissions,
+        );
+      }
       command.options.forEach(option => {
+        if (
+          option.type === CommandOptionType.STRING &&
+          ((option.minLength !== undefined &&
+            (!Number.isInteger(option.minLength) ||
+              option.minLength < 0 ||
+              option.minLength > 6000)) ||
+            (option.maxLength !== undefined &&
+              (!Number.isInteger(option.maxLength) ||
+                option.maxLength < 1 ||
+                option.maxLength > 6000)) ||
+            (option.minLength !== undefined &&
+              option.maxLength !== undefined &&
+              option.minLength > option.maxLength))
+        ) {
+          Log.throw("Cannot build command. Invalid string option bounds.", {
+            maxLength: option.maxLength,
+            minLength: option.minLength,
+            optionName: option.name,
+          });
+        }
         switch (option.type) {
           case CommandOptionType.BOOLEAN:
             slashCommandBuilder.addBooleanOption(booleanOption =>
@@ -64,45 +101,67 @@ export class Discord {
             );
             break;
           case CommandOptionType.STRING:
-            slashCommandBuilder.addStringOption(stringOption =>
-              stringOption
+            slashCommandBuilder.addStringOption(stringOption => {
+              const stringOptionBuilder: discordJs.SlashCommandStringOption =
+                stringOption
+                  .setName(option.name)
+                  .setDescription(option.description)
+                  .setRequired(option.isRequired);
+              if (option.minLength !== undefined) {
+                stringOptionBuilder.setMinLength(option.minLength);
+              }
+              if (option.maxLength !== undefined) {
+                stringOptionBuilder.setMaxLength(option.maxLength);
+              }
+              return stringOptionBuilder;
+            });
+            break;
+          case CommandOptionType.USER:
+            slashCommandBuilder.addUserOption(userOption =>
+              userOption
                 .setName(option.name)
                 .setDescription(option.description)
-                .setRequired(option.isRequired)
-                .setMaxLength(option.maxLength)
-                .setMinLength(option.minLength),
+                .setRequired(option.isRequired),
             );
             break;
           default:
             Log.throw("Cannot build command. Unknown command option type.", {
-              option,
+              optionName: "unknown",
+              optionType: "unknown",
             });
         }
       });
-      if (command.isGlobal) {
-        if (command.name in globalCommandMap) {
-          Log.throw(
-            "Cannot deploy global commands. Names in command list are not unique.",
-            { commandList },
-          );
-        }
-        globalCommandMap[command.name] = slashCommandBuilder;
-      }
-      if (command.isGuild) {
-        if (command.name in guildCommandMap) {
-          Log.throw(
-            "Cannot deploy guild commands. Names in command list are not unique.",
-            { commandList },
-          );
-        }
-        guildCommandMap[command.name] = slashCommandBuilder;
+      switch (command.registrationType) {
+        case CommandRegistrationType.GLOBAL:
+          if (globalCommandMap.has(command.name)) {
+            Log.throw(
+              "Cannot deploy global commands. Names in command list are not unique.",
+              { commandNames: commandList.map(command => command.name) },
+            );
+          }
+          globalCommandMap.set(command.name, slashCommandBuilder);
+          break;
+        case CommandRegistrationType.GUILD:
+          if (guildCommandMap.has(command.name)) {
+            Log.throw(
+              "Cannot deploy guild commands. Names in command list are not unique.",
+              { commandNames: commandList.map(command => command.name) },
+            );
+          }
+          guildCommandMap.set(command.name, slashCommandBuilder);
+          break;
+        default:
+          Log.throw("Cannot deploy command. Unknown registration type.", {
+            commandName: command.name,
+            registrationType: command.registrationType,
+          });
       }
     });
     guildIds = guildIds ?? Array.from(this.client.guilds.cache.keys());
-    await this.__deployGlobalCommands(rest, Object.values(globalCommandMap));
+    await this.__deployGlobalCommands(rest, [...globalCommandMap.values()]);
     await this.__deployGuildCommands(
       rest,
-      Object.values(guildCommandMap),
+      [...guildCommandMap.values()],
       guildIds,
     );
     Log.debug("Discord commands deployed successfully.");
@@ -137,13 +196,14 @@ export class Discord {
     channelId: string,
     messageCreateOptions: discordJs.MessageCreateOptions,
   ): Promise<ChannelMessage> {
-    Log.debug("Sending Discord channel message...", {
-      channelId,
-      messageCreateOptions,
-    });
-    const channel: discordJs.TextChannel = this.__getChannel(channelId);
-    const message: discordJs.Message = await channel.send(messageCreateOptions);
-    Log.debug("Discord message sent successfully.", { message });
+    const safeMessageCreateOptions: discordJs.MessageCreateOptions =
+      sanitizeBaseMessageOptions(messageCreateOptions);
+    Log.debug("Sending Discord channel message...", { channelId });
+    const channel: discordJs.TextChannel = await this.__getChannel(channelId);
+    const message: discordJs.Message = await channel.send(
+      safeMessageCreateOptions,
+    );
+    Log.debug("Discord message sent successfully.", { messageId: message.id });
     const channelMessage: ChannelMessage = new ChannelMessage(
       message,
       channelId,
@@ -155,7 +215,9 @@ export class Discord {
     rest: discordJs.REST,
     commands: discordJs.SlashCommandBuilder[],
   ): Promise<void> {
-    Log.debug("Deploying global commands to Discord...", { commands });
+    Log.debug("Deploying global commands to Discord...", {
+      commandCount: commands.length,
+    });
     await rest.put(
       discordJs.Routes.applicationCommands(
         Environment.config.discordApplicationId,
@@ -173,7 +235,7 @@ export class Discord {
     guildIds: string[],
   ): Promise<void> {
     Log.debug("Deploying commands to Discord guilds...", {
-      commands,
+      commandCount: commands.length,
       guildIds,
     });
     await Promise.all(
@@ -192,23 +254,48 @@ export class Discord {
     Log.debug("Discord guild commands deployed successfully.");
   }
 
-  private static __getChannel(channelId: string): discordJs.TextChannel {
+  private static async __getChannel(
+    channelId: string,
+  ): Promise<discordJs.TextChannel> {
     Log.debug("Retrieving Discord channel...", { channelId });
-    const channel: discordJs.Channel | undefined =
+    let channel: discordJs.Channel | null | undefined =
       this.client.channels.cache.get(channelId);
     if (channel === undefined) {
-      Log.throw(
-        "Cannot get Discord channel. ID was not found in the channel cache.",
-        { channelId },
-      );
+      try {
+        channel = await this.client.channels.fetch(channelId);
+      } catch (reason: unknown) {
+        if (this.__isUnknownChannelError(reason)) {
+          channel = null;
+        } else {
+          Log.throw("Cannot get Discord channel. Fetch failed.", {
+            channelId,
+            error: Log.summarizeError(reason),
+          });
+        }
+      }
+    }
+    if (channel === null) {
+      Log.throw("Cannot get Discord channel. ID was not found.", { channelId });
     }
     if (channel.type !== discordJs.ChannelType.GuildText) {
       Log.throw(
         "Cannot get Discord channel. Channel at ID was not a guild text channel.",
-        { channel },
+        { channelId, channelType: channel.type },
       );
     }
-    Log.debug("Discord channel retrieved successfully.", { channel });
+    Log.debug("Discord channel retrieved successfully.", {
+      channelId,
+      channelType: channel.type,
+    });
     return channel;
+  }
+
+  private static __isUnknownChannelError(reason: unknown): boolean {
+    return (
+      typeof reason === "object" &&
+      reason !== null &&
+      "code" in reason &&
+      reason.code === 10003
+    );
   }
 }

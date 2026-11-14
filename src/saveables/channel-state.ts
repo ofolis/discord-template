@@ -1,47 +1,90 @@
-import * as discordJs from "discord.js";
 import { UserState } from ".";
-import { ChannelCommandMessage, Json, Log, Saveable, Utils } from "../core";
-import { ChannelStateJson, UserStateJson } from "../types";
+import {
+  ChannelCommandMessage,
+  InvalidDomainStateError,
+  Json,
+  Log,
+  Saveable,
+} from "../core";
+import { ChannelStateJson } from "../types";
 
 export class ChannelState implements Saveable {
   public readonly channelId: string;
 
-  private __userStates: Record<string, UserState> = {};
+  private __userStates: Record<string, UserState> =
+    ChannelState.__createUserStateRecord();
 
-  public constructor(messageOrJson: ChannelCommandMessage | Json) {
-    if (messageOrJson instanceof ChannelCommandMessage) {
-      const message: ChannelCommandMessage = messageOrJson;
-      this.channelId = message.channelId;
-      // Create initial user state
-      this.__createUserState(message.user);
-    } else {
-      const json: Json = messageOrJson;
-      this.__userStates = Object.fromEntries(
-        Object.entries(
-          Utils.getJsonEntry(json, "userStates") as Record<
-            string,
-            UserStateJson
-          >,
-        ).map(([userStateId, userStateJson]) => [
-          userStateId,
-          new UserState(userStateJson),
-        ]),
-      );
-      this.channelId = Utils.getJsonEntry(json, "channelId") as string;
+  private constructor(
+    channelId: string,
+    userStates: Record<string, UserState>,
+  ) {
+    this.channelId = channelId;
+    this.__userStates = userStates;
+  }
+
+  public static fromJson(json: Json): ChannelState {
+    if (!ChannelState.__isRecord(json)) {
+      throw new InvalidDomainStateError();
     }
+    const channelId: unknown = json.channelId;
+    const userStates: unknown = json.userStates;
+    if (
+      typeof channelId !== "string" ||
+      channelId.length === 0 ||
+      !ChannelState.__isRecord(userStates)
+    ) {
+      throw new InvalidDomainStateError();
+    }
+    const userStateById: Record<string, UserState> =
+      ChannelState.__createUserStateRecord();
+    Object.entries(userStates).forEach(([userStateId, userStateJson]) => {
+      if (!ChannelState.__isRecord(userStateJson)) {
+        throw new InvalidDomainStateError();
+      }
+      const id: unknown = userStateJson.id;
+      const nickname: unknown = userStateJson.nickname;
+      if (
+        userStateId !== id ||
+        typeof id !== "string" ||
+        id.length === 0 ||
+        (nickname !== null && typeof nickname !== "string")
+      ) {
+        throw new InvalidDomainStateError();
+      }
+      userStateById[userStateId] = new UserState({
+        id,
+        nickname,
+      });
+    });
+    return new ChannelState(channelId, userStateById);
+  }
+
+  public static fromMessage(message: ChannelCommandMessage): ChannelState {
+    const userStates: Record<string, UserState> =
+      ChannelState.__createUserStateRecord();
+    userStates[message.user.id] = new UserState(message.user);
+    return new ChannelState(message.channelId, userStates);
+  }
+
+  private static __createUserStateRecord(): Record<string, UserState> {
+    return Object.create(null) as Record<string, UserState>;
+  }
+
+  private static __isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
   }
 
   public getUserNickname(userId: string): string | null {
     Log.debug("Getting user nickname.", { userId });
-    if (!(userId in this.__userStates)) {
+    if (!Object.hasOwn(this.__userStates, userId)) {
       return null;
     }
     return this.__userStates[userId].nickname;
   }
 
   public setUserNickname(userId: string, nickname: string | null): void {
-    Log.debug("Setting user nickname.", { userId, nickname });
-    if (userId in this.__userStates) {
+    Log.debug("Setting user nickname.", { userId });
+    if (Object.hasOwn(this.__userStates, userId)) {
       this.__userStates[userId].nickname = nickname;
     }
   }
@@ -56,9 +99,5 @@ export class ChannelState implements Saveable {
         ]),
       ),
     };
-  }
-
-  private __createUserState(userOrPlayer: discordJs.User): void {
-    this.__userStates[userOrPlayer.id] = new UserState(userOrPlayer);
   }
 }

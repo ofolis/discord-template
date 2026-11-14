@@ -1,0 +1,50 @@
+{
+  "author": "Josh Jones",
+  "dependencies": {
+    "discord.js": "^14.28.1",
+    "dotenv": "^16.4.5",
+    "random-js": "^2.1.0"
+  },
+  "overrides": {
+    "@sapphire/shapeshift": {
+      "lodash": "4.18.1"
+    }
+  },
+  "description": "A Discord bot template.",
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@stylistic/eslint-plugin": "^4.0.0",
+    "@types/node": "^24.0.0",
+    "commitizen": "^4.3.1",
+    "cz-conventional-changelog": "^3.3.0",
+    "eslint": "^9.16.0",
+    "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.1.7",
+    "prettier": "3.4.2",
+    "prettier-plugin-organize-imports": "^4.1.0",
+    "prettier-plugin-sort-members": "^0.2.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.17.0",
+    "vitest": "^5.1.0"
+  },
+  "main": "dist/index.js",
+  "name": "discord-template",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts 2>&1 | tee console.log",
+    "format": "prettier . --write",
+    "init": "node scripts/initialize.mjs",
+    "lint": "prettier . --list-different && eslint",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "validate:release-activation": "node scripts/validate-release-activation.mjs",
+    "prepare": "husky"
+  }
+}

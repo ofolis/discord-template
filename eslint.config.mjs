@@ -17,8 +17,14 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ["*.mjs", "eslint-rules/*.mjs"],
+          allowDefaultProject: [
+            "*.mjs",
+            "eslint-rules/*.mjs",
+            "scripts/*.mjs",
+            "tests/*.ts",
+          ],
           defaultProject: "tsconfig.json",
+          maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 30,
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -117,6 +123,33 @@ export default tseslint.config(
       "linebreak-style": ["error", "unix"],
       "require-await": ["error"],
       "lines-between-class-members": ["error", "always"],
+    },
+  },
+  {
+    files: ["tests/**/*.ts"],
+    rules: {
+      "@typescript-eslint/naming-convention": "off",
+      "@typescript-eslint/no-dynamic-delete": "off",
+      "@typescript-eslint/typedef": "off",
+      "custom-rules/only-protected-bracket-access": "off",
+    },
+  },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly",
+      },
+    },
+    rules: {
+      "@typescript-eslint/explicit-function-return-type": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/restrict-template-expressions": "off",
+      "@typescript-eslint/strict-boolean-expressions": "off",
+      "@typescript-eslint/typedef": "off",
     },
   },
   eslintConfigPrettier,
