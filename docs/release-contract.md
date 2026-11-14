@@ -2,6 +2,36 @@
 
 This repository is a source-code template. It has no application semantic version and does not publish GitHub Releases or container images.
 
+## Repository Settings
+
+Repositories created through GitHub's **Use this template** feature do not automatically inherit the source repository's rulesets or merge settings. Configure each implementing repository independently with the following recommended settings.
+
+### GitHub Actions
+
+Enable GitHub Actions, allow all actions and reusable workflows, and use `Main CI` for pull request validation.
+
+### Pull request merging
+
+Enable **Squash and merge** and disable merge commits and rebase merging. Set the default squash commit message to **Pull request title**, enable automatic deletion of merged branches, and keep auto-merge optional.
+
+### Branch protection
+
+Create an active ruleset targeting the default branch with these requirements:
+
+- Require pull requests before merging.
+- Require the `Main CI` status check.
+- Require resolution of review conversations.
+- Require linear history.
+- Block force pushes and branch deletion.
+- Do not require a second human approval for a single-maintainer repository.
+- Do not require a merge queue.
+
+`Main CI` should be running successfully before it is configured as a required status check. This ensures that GitHub can select the intended check when the ruleset is saved.
+
+### Semantic versioning
+
+Semantic-release analyzes the final squash commit on `main`. Use Conventional Commit pull request titles so the squash commit communicates the intended release: `fix:` produces a patch release, `feat:` produces a minor release, `feat!:` produces a major release, and `docs:` produces no release under the current configuration. Other Conventional Commit types and breaking-change footers are also supported according to the release configuration. Squash merging is recommended for preserving one final analyzed commit, but it is not technically required by semantic-release.
+
 ## Semantic release
 
 Implementing repositories use semantic-release as the only version authority. The shared configuration:
