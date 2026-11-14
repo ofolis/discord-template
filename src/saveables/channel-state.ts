@@ -11,7 +11,8 @@ import { ChannelStateJson } from "../types";
 export class ChannelState implements Saveable {
   public readonly channelId: string;
 
-  private __userStates: Record<string, UserState> = {};
+  private __userStates: Record<string, UserState> =
+    ChannelState.__createUserStateRecord();
 
   private constructor(
     channelId: string,
@@ -34,7 +35,8 @@ export class ChannelState implements Saveable {
     ) {
       throw new InvalidDomainStateError();
     }
-    const userStateById: Record<string, UserState> = {};
+    const userStateById: Record<string, UserState> =
+      ChannelState.__createUserStateRecord();
     Object.entries(userStates).forEach(([userStateId, userStateJson]) => {
       if (!ChannelState.__isRecord(userStateJson)) {
         throw new InvalidDomainStateError();
@@ -58,9 +60,14 @@ export class ChannelState implements Saveable {
   }
 
   public static fromMessage(message: ChannelCommandMessage): ChannelState {
-    const userStates: Record<string, UserState> = {};
+    const userStates: Record<string, UserState> =
+      ChannelState.__createUserStateRecord();
     userStates[message.user.id] = new UserState(message.user);
     return new ChannelState(message.channelId, userStates);
+  }
+
+  private static __createUserStateRecord(): Record<string, UserState> {
+    return Object.create(null) as Record<string, UserState>;
   }
 
   private static __isRecord(value: unknown): value is Record<string, unknown> {
@@ -69,7 +76,7 @@ export class ChannelState implements Saveable {
 
   public getUserNickname(userId: string): string | null {
     Log.debug("Getting user nickname.", { userId });
-    if (!(userId in this.__userStates)) {
+    if (!Object.hasOwn(this.__userStates, userId)) {
       return null;
     }
     return this.__userStates[userId].nickname;
@@ -77,7 +84,7 @@ export class ChannelState implements Saveable {
 
   public setUserNickname(userId: string, nickname: string | null): void {
     Log.debug("Setting user nickname.", { userId });
-    if (userId in this.__userStates) {
+    if (Object.hasOwn(this.__userStates, userId)) {
       this.__userStates[userId].nickname = nickname;
     }
   }

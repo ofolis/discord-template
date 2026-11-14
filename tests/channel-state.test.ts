@@ -1,3 +1,4 @@
+import * as discordJs from "discord.js";
 import { mkdtemp, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -11,6 +12,7 @@ import {
   StorageOperationError,
 } from "../src/core";
 import { ChannelState } from "../src/saveables";
+import type { ChannelStateJson } from "../src/types";
 
 const temporaryDirectories: string[] = [];
 
@@ -54,6 +56,87 @@ describe("channel-state persistence", () => {
       channelId: "channel",
       userStates: { user: { id: "user", nickname: "before" } },
     });
+  });
+
+  it("round-trips prototype-sensitive user IDs and updates their nicknames", () => {
+    const userStates = JSON.parse(
+      '{"__proto__":{"id":"__proto__","nickname":"before"},"constructor":{"id":"constructor","nickname":"constructor-before"},"toString":{"id":"toString","nickname":"to-string-before"}}',
+    ) as Record<string, { id: string; nickname: string }>;
+    const channelState: ChannelState = ChannelState.fromJson({
+      channelId: "channel",
+      userStates,
+    });
+
+    expect(channelState.getUserNickname("__proto__")).toBe("before");
+    expect(channelState.getUserNickname("constructor")).toBe(
+      "constructor-before",
+    );
+    expect(channelState.getUserNickname("toString")).toBe("to-string-before");
+    expect(channelState.getUserNickname("hasOwnProperty")).toBeNull();
+
+    channelState.setUserNickname("__proto__", "after");
+    channelState.setUserNickname("constructor", "constructor-after");
+    channelState.setUserNickname("toString", "to-string-after");
+    channelState.setUserNickname("hasOwnProperty", "should-not-be-added");
+
+    const serialized = channelState.toJson();
+    expect(JSON.stringify(serialized)).toBe(
+      '{"channelId":"channel","userStates":{"__proto__":{"id":"__proto__","nickname":"after"},"constructor":{"id":"constructor","nickname":"constructor-after"},"toString":{"id":"toString","nickname":"to-string-after"}}}',
+    );
+    expect(Object.hasOwn(serialized.userStates, "__proto__")).toBe(true);
+    expect(Object.getPrototypeOf(serialized.userStates)).toBe(Object.prototype);
+  });
+
+  it("rejects a prototype-sensitive user-state key with a mismatched nested ID", () => {
+    const userStates = Object.fromEntries([
+      ["__proto__", { id: "different", nickname: null }],
+    ]);
+
+    expect(() =>
+      ChannelState.fromJson({ channelId: "channel", userStates }),
+    ).toThrow(InvalidDomainStateError);
+  });
+
+  it("creates prototype-sensitive user state from a message", () => {
+    const user: discordJs.User = Object.create(
+      discordJs.User.prototype,
+    ) as discordJs.User;
+    Object.defineProperty(user, "id", { value: "__proto__" });
+    const message: ChannelCommandMessage = {
+      channelId: "channel",
+      member: { nickname: "message-nickname" },
+      user,
+    } as ChannelCommandMessage;
+
+    const channelState: ChannelState = ChannelState.fromMessage(message);
+
+    expect(channelState.getUserNickname("__proto__")).toBeNull();
+    channelState.setUserNickname("__proto__", "updated");
+    expect(channelState.toJson()).toStrictEqual(
+      JSON.parse(
+        '{"channelId":"channel","userStates":{"__proto__":{"id":"__proto__","nickname":"updated"}}}',
+      ),
+    );
+  });
+
+  it("preserves a prototype-sensitive entry through JsonStore persistence", async () => {
+    const directory: string = await mkdtemp(
+      join(tmpdir(), "discord-template-"),
+    );
+    temporaryDirectories.push(directory);
+    const store: JsonStore = new JsonStore(directory);
+    await store.initialize();
+    const persisted: ChannelStateJson = JSON.parse(
+      '{"channelId":"channel","userStates":{"__proto__":{"id":"__proto__","nickname":"before"}}}',
+    ) as ChannelStateJson;
+
+    await store.write("channel", persisted);
+    const loaded: ChannelStateJson | null = await store.read("channel");
+    if (loaded === null) {
+      throw new Error("Expected persisted channel state.");
+    }
+
+    expect(ChannelState.fromJson(loaded).toJson()).toStrictEqual(persisted);
   });
 
   it("updates and preserves valid channel state in one store transaction", async () => {
