@@ -8,12 +8,12 @@ export class DataController {
 
   public async updateChannelState(
     message: ChannelCommandMessage,
-    afterMutation: () => Promise<void>,
+    afterPersistence: () => Promise<void>,
   ): Promise<void> {
     Log.debug("Updating channel state.");
     await this.__store.update<ChannelStateJson>(
       message.channelId,
-      async channelStateJson => {
+      channelStateJson => {
         const channelState: ChannelState =
           channelStateJson === null
             ? ChannelState.fromMessage(message)
@@ -22,9 +22,9 @@ export class DataController {
           throw new InvalidDomainStateError();
         }
         channelState.setUserNickname(message.user.id, message.member.nickname);
-        await afterMutation();
         return channelState.toJson();
       },
     );
+    await afterPersistence();
   }
 }

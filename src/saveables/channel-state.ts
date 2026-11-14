@@ -42,6 +42,7 @@ export class ChannelState implements Saveable {
       const id: unknown = userStateJson.id;
       const nickname: unknown = userStateJson.nickname;
       if (
+        userStateId !== id ||
         typeof id !== "string" ||
         id.length === 0 ||
         (nickname !== null && typeof nickname !== "string")

@@ -7,6 +7,7 @@ import {
   handleCommandInteraction,
   isSupportedCommandInteraction,
   Message,
+  StorageOperationError,
 } from "../src/core";
 
 const createMessage = (
@@ -464,6 +465,35 @@ describe("command interaction failure handling", () => {
     await handleCommandInteraction(
       createInteraction({ deferred: false, replied: false }),
       [command],
+    );
+
+    expect(update).toHaveBeenCalledWith({
+      content: "Something went wrong while executing this command.",
+    });
+    create.mockRestore();
+  });
+
+  it("communicates a storage failure before finalizing the interaction", async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    const message = {
+      canFinalizeInteractionResponse: true,
+      update,
+    } as unknown as ChannelCommandMessage;
+    const create = vi
+      .spyOn(ChannelCommandMessage, "create")
+      .mockResolvedValue(message);
+    const storageFailure: Command = {
+      ...command,
+      execute: () => Promise.reject(new StorageOperationError("write")),
+    };
+
+    await handleCommandInteraction(
+      createInteraction({
+        commandName: storageFailure.name,
+        deferred: false,
+        replied: false,
+      }),
+      [storageFailure],
     );
 
     expect(update).toHaveBeenCalledWith({
