@@ -138,3 +138,6 @@ data/
 
 # Binary builds
 build/
+
+# macOS metadata
+.DS_Store
