@@ -41,6 +41,43 @@ describe("logging", () => {
     );
   });
 
+  it("includes only bounded allowlisted metadata from an error cause", () => {
+    const error = Object.assign(new Error("token=synthetic-secret"), {
+      cause: Object.assign(new Error("cause=synthetic-secret"), {
+        code: "E_SYNTHETIC",
+        requestBody: { token: "synthetic-secret" },
+      }),
+      code: "E_TOP_LEVEL",
+    });
+
+    expect(Log.summarizeError(error)).toStrictEqual({
+      causeCode: "E_SYNTHETIC",
+      causeName: "Error",
+      errorCode: "E_TOP_LEVEL",
+      errorName: "Error",
+    });
+    expect(JSON.stringify(Log.summarizeError(error))).not.toContain(
+      "synthetic-secret",
+    );
+  });
+
+  it("ignores malformed cause metadata", () => {
+    const malformedCause = Object.assign(new Error("outer"), {
+      cause: {
+        code: { nested: "secret" },
+        message: "token=synthetic-secret",
+        name: "Cause Name With Spaces",
+      },
+    });
+
+    expect(Log.summarizeError(malformedCause)).toStrictEqual({
+      errorName: "Error",
+    });
+    expect(JSON.stringify(Log.summarizeError(malformedCause))).not.toContain(
+      "synthetic-secret",
+    );
+  });
+
   it("does not log persisted JSON when a key is missing", () => {
     const consoleError = vi
       .spyOn(console, "error")

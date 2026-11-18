@@ -29,7 +29,7 @@ export class Discord {
   ): Promise<void> {
     Log.debug("Deploying Discord commands...", {
       commandCount: commandList.length,
-      guildIds,
+      guildCount: guildIds?.length,
     });
     const rest: discordJs.REST = new discordJs.REST({
       version: "10",
@@ -218,14 +218,22 @@ export class Discord {
     Log.debug("Deploying global commands to Discord...", {
       commandCount: commands.length,
     });
-    await rest.put(
-      discordJs.Routes.applicationCommands(
-        Environment.config.discordApplicationId,
-      ),
-      {
-        body: commands,
-      },
-    );
+    try {
+      await rest.put(
+        discordJs.Routes.applicationCommands(
+          Environment.config.discordApplicationId,
+        ),
+        {
+          body: commands,
+        },
+      );
+    } catch (reason: unknown) {
+      Log.error("Failed to deploy global Discord commands.", {
+        commandCount: commands.length,
+        error: Log.summarizeError(reason),
+      });
+      throw reason;
+    }
     Log.debug("Discord global commands deployed successfully.");
   }
 
@@ -236,21 +244,30 @@ export class Discord {
   ): Promise<void> {
     Log.debug("Deploying commands to Discord guilds...", {
       commandCount: commands.length,
-      guildIds,
+      guildCount: guildIds.length,
     });
-    await Promise.all(
-      guildIds.map(guildId =>
-        rest.put(
-          discordJs.Routes.applicationGuildCommands(
-            Environment.config.discordApplicationId,
-            guildId,
+    try {
+      await Promise.all(
+        guildIds.map(guildId =>
+          rest.put(
+            discordJs.Routes.applicationGuildCommands(
+              Environment.config.discordApplicationId,
+              guildId,
+            ),
+            {
+              body: commands,
+            },
           ),
-          {
-            body: commands,
-          },
         ),
-      ),
-    );
+      );
+    } catch (reason: unknown) {
+      Log.error("Failed to deploy Discord guild commands.", {
+        commandCount: commands.length,
+        guildCount: guildIds.length,
+        error: Log.summarizeError(reason),
+      });
+      throw reason;
+    }
     Log.debug("Discord guild commands deployed successfully.");
   }
 

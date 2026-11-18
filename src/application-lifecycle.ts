@@ -44,6 +44,12 @@ export class ApplicationLifecycle {
 
   private __client: discordJs.Client | undefined;
 
+  private __clientErrorListener: ((error: Error) => void) | undefined;
+
+  private __clientReadyListener:
+    | ((client: discordJs.Client<true>) => void)
+    | undefined;
+
   private __commands: Command[] = [];
 
   private readonly __createClient: () => discordJs.Client;
@@ -66,10 +72,6 @@ export class ApplicationLifecycle {
     | undefined;
 
   private readonly __loadConfig: () => CoreConfig;
-
-  private __readyListener:
-    | ((client: discordJs.Client<true>) => void)
-    | undefined;
 
   private __readyObserved: boolean = false;
 
@@ -163,6 +165,7 @@ export class ApplicationLifecycle {
       void loginPromise.catch(() => undefined);
       await this.__awaitStartupOperation(loginPromise);
       this.__assertStarting();
+      Log.success("Discord client logged in successfully.");
 
       await this.__awaitStartupOperation(this.__initialDeploymentPromise);
       this.__assertStarting();
@@ -239,6 +242,9 @@ export class ApplicationLifecycle {
     this.__removeSignalListeners();
     this.__state = "stopped";
 
+    if (!startupFailure && !timedOut && !this.__cleanupFailed) {
+      Log.success("Application shut down gracefully.");
+    }
     if (startupFailure || timedOut || this.__cleanupFailed) {
       process.exitCode = 1;
     }
@@ -253,7 +259,7 @@ export class ApplicationLifecycle {
   private __registerClientListeners(): void {
     const client: discordJs.Client = this.__client as discordJs.Client;
     this.__initialDeploymentPromise = new Promise<void>((resolve, reject) => {
-      this.__readyListener = (): void => {
+      this.__clientReadyListener = (): void => {
         if (this.__readyObserved) {
           return;
         }
@@ -275,17 +281,30 @@ export class ApplicationLifecycle {
           );
           return;
         }
-        void deployment.then(resolve, (reason: unknown): void => {
-          reject(
-            reason instanceof Error
-              ? reason
-              : new Error("Initial command deployment failed."),
-          );
-        });
+        void deployment.then(
+          () => {
+            Log.success("Initial Discord command deployment completed.", {
+              commandCount: this.__commands.length,
+            });
+            resolve();
+          },
+          (reason: unknown): void => {
+            reject(
+              reason instanceof Error
+                ? reason
+                : new Error("Initial command deployment failed."),
+            );
+          },
+        );
       };
-      client.once("ready", this.__readyListener);
+      client.once("clientReady", this.__clientReadyListener);
     });
     void this.__initialDeploymentPromise.catch(() => undefined);
+
+    this.__clientErrorListener = (error): void => {
+      this.__logRuntimeFailure("Discord client runtime error.", error);
+    };
+    client.on("error", this.__clientErrorListener);
 
     this.__guildCreateListener = (guild): void => {
       if (this.__state !== "running") {
@@ -303,12 +322,7 @@ export class ApplicationLifecycle {
         );
         return;
       }
-      void deployment.catch((reason: unknown) => {
-        this.__logRuntimeFailure(
-          "Failed to deploy Discord bot on new guild.",
-          reason,
-        );
-      });
+      void deployment.catch(() => undefined);
     };
     client.on("guildCreate", this.__guildCreateListener);
 
@@ -344,8 +358,11 @@ export class ApplicationLifecycle {
     if (this.__client === undefined) {
       return;
     }
-    if (this.__readyListener !== undefined) {
-      this.__client.off("ready", this.__readyListener);
+    if (this.__clientErrorListener !== undefined) {
+      this.__client.off("error", this.__clientErrorListener);
+    }
+    if (this.__clientReadyListener !== undefined) {
+      this.__client.off("clientReady", this.__clientReadyListener);
     }
     if (this.__guildCreateListener !== undefined) {
       this.__client.off("guildCreate", this.__guildCreateListener);
