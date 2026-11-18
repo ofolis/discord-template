@@ -35,6 +35,7 @@ export class Log {
       return { reasonType: typeof reason };
     }
     const errorLike: Error & {
+      cause?: unknown;
       code?: unknown;
       status?: unknown;
       statusCode?: unknown;
@@ -53,6 +54,25 @@ export class Log {
     }
     if (status !== undefined) {
       summary.status = status;
+    }
+    const cause: unknown = errorLike.cause;
+    if (typeof cause === "object" && cause !== null) {
+      const causeLike: { code?: unknown; name?: unknown } = cause as {
+        code?: unknown;
+        name?: unknown;
+      };
+      const causeName: string | undefined = this.__formatStableValue(
+        causeLike.name,
+      );
+      const causeCode: string | undefined = this.__formatStableValue(
+        causeLike.code,
+      );
+      if (causeName !== undefined) {
+        summary.causeName = causeName;
+      }
+      if (causeCode !== undefined) {
+        summary.causeCode = causeCode;
+      }
     }
     return summary;
   }

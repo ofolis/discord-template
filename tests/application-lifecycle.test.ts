@@ -5,7 +5,7 @@ import {
   ApplicationLifecycle,
   ApplicationLifecycleState,
 } from "../src/application-lifecycle";
-import { JsonStore } from "../src/core";
+import { JsonStore, Log } from "../src/core";
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -64,7 +64,7 @@ async function startRunning(
 ): Promise<void> {
   const starting: Promise<void> = lifecycle.start();
   await Promise.resolve();
-  client.emit("ready", client);
+  client.emit("clientReady", client);
   await starting;
   expect(lifecycle.state).toBe("running");
 }
@@ -75,7 +75,7 @@ afterEach(() => {
 });
 
 describe("ApplicationLifecycle", () => {
-  it("waits for ready and initial deployment before running", async () => {
+  it("waits for clientReady and initial deployment before running", async () => {
     const client = new FakeClient();
     const deployment = createDeferred<undefined>();
     const lifecycle = createLifecycle(
@@ -89,7 +89,7 @@ describe("ApplicationLifecycle", () => {
     expect(lifecycle.state).toBe("starting");
     expect(client.login).toHaveBeenCalledWith("bot-token");
 
-    client.emit("ready", client);
+    client.emit("clientReady", client);
     await Promise.resolve();
     expect(lifecycle.state).toBe("starting");
     expect(lifecycle.activeRegistrationCount).toBe(1);
@@ -98,7 +98,7 @@ describe("ApplicationLifecycle", () => {
     await starting;
     expect(lifecycle.state).toBe("running");
 
-    client.emit("ready", client);
+    client.emit("clientReady", client);
     expect(lifecycle.activeRegistrationCount).toBe(0);
   });
 
@@ -110,7 +110,7 @@ describe("ApplicationLifecycle", () => {
     const starting: Promise<void> = lifecycle.start();
 
     await Promise.resolve();
-    client.emit("ready", client);
+    client.emit("clientReady", client);
     expect(deployCommands).toHaveBeenCalledOnce();
     expect(lifecycle.activeRegistrationCount).toBe(1);
     const startupFailure = expect(starting).rejects.toThrow(
@@ -179,10 +179,18 @@ describe("ApplicationLifecycle", () => {
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});
+    const deploymentError = new Error("synthetic registration failure");
     const deployment = vi
       .fn()
       .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error("synthetic registration failure"));
+      .mockImplementationOnce(() => {
+        Log.error("Failed to deploy Discord guild commands.", {
+          commandCount: 0,
+          error: Log.summarizeError(deploymentError),
+          guildCount: 1,
+        });
+        return Promise.reject(deploymentError);
+      });
     const lifecycle = createLifecycle(client, undefined, deployment);
     await startRunning(lifecycle, client);
 
@@ -191,8 +199,61 @@ describe("ApplicationLifecycle", () => {
     await vi.waitFor(() => {
       expect(lifecycle.activeRegistrationCount).toBe(0);
     });
-    expect(consoleError).toHaveBeenCalled();
+    const deploymentLogs = consoleError.mock.calls.filter(call =>
+      call.some(value =>
+        String(value).includes("Failed to deploy Discord guild commands"),
+      ),
+    );
+    expect(deploymentLogs).toHaveLength(1);
+    expect(
+      consoleError.mock.calls.some(call =>
+        call.some(value =>
+          String(value).includes("Failed to deploy Discord bot on new guild"),
+        ),
+      ),
+    ).toBe(false);
     expect(lifecycle.state).toBe("running");
+  });
+
+  it("logs client errors during startup, operation, and shutdown", async () => {
+    const client = new FakeClient();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const destroy = createDeferred<undefined>();
+    client.destroy.mockReturnValue(destroy.promise);
+    const lifecycle = createLifecycle(client);
+    const starting: Promise<void> = lifecycle.start();
+
+    await Promise.resolve();
+    client.emit("error", new Error("token=synthetic-secret"));
+    expect(lifecycle.state).toBe("starting");
+    client.emit("clientReady", client);
+    await starting;
+
+    client.emit("error", new Error("token=synthetic-secret"));
+    expect(lifecycle.state).toBe("running");
+
+    const stopping: Promise<void> = lifecycle.shutdown();
+    await vi.waitFor(() => {
+      expect(client.destroy).toHaveBeenCalledOnce();
+    });
+    client.emit("error", new Error("token=synthetic-secret"));
+    expect(lifecycle.state).toBe("stopping");
+
+    const runtimeErrorLogs = consoleError.mock.calls.filter(call =>
+      call.some(value =>
+        String(value).includes("Discord client runtime error"),
+      ),
+    );
+    expect(runtimeErrorLogs).toHaveLength(3);
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+      "synthetic-secret",
+    );
+
+    destroy.resolve(undefined);
+    await stopping;
+    expect(client.listenerCount("error")).toBe(0);
   });
 
   it("shares one shutdown operation for repeated requests", async () => {
@@ -269,7 +330,7 @@ describe("ApplicationLifecycle", () => {
       await drainStarted.promise;
       expect(lifecycle.state).toBe("stopping");
 
-      client.emit("ready", client);
+      client.emit("clientReady", client);
       await new Promise<void>(resolve => {
         setImmediate(resolve);
       });

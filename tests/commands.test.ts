@@ -254,6 +254,64 @@ describe("command contracts", () => {
     put.mockRestore();
   });
 
+  it("preserves global deployment errors while logging safe context", async () => {
+    const command: Command = {
+      description: "Global command.",
+      execute: () => Promise.resolve(),
+      isPrivate: false,
+      name: "global-command",
+      options: [],
+      registrationType: CommandRegistrationType.GLOBAL,
+    };
+    const deploymentError = Object.assign(new Error("token=synthetic-secret"), {
+      code: 50001,
+    });
+    const put = vi
+      .spyOn(discordJs.REST.prototype, "put")
+      .mockRejectedValue(deploymentError);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await expect(Discord.deployCommands([command], [])).rejects.toBe(
+      deploymentError,
+    );
+    const diagnostics = JSON.stringify(consoleError.mock.calls);
+    expect(diagnostics).toContain("Failed to deploy global Discord commands");
+    expect(diagnostics).toContain("commandCount");
+    expect(diagnostics).not.toContain("synthetic-secret");
+    put.mockRestore();
+  });
+
+  it("preserves guild deployment errors while logging bounded context", async () => {
+    const command: Command = {
+      description: "Guild command.",
+      execute: () => Promise.resolve(),
+      isPrivate: false,
+      name: "guild-command",
+      options: [],
+      registrationType: CommandRegistrationType.GUILD,
+    };
+    const deploymentError = new Error("synthetic guild failure");
+    const put = vi
+      .spyOn(discordJs.REST.prototype, "put")
+      .mockResolvedValueOnce({} as never)
+      .mockRejectedValueOnce(deploymentError);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await expect(
+      Discord.deployCommands([command], ["guild-one", "guild-two"]),
+    ).rejects.toBe(deploymentError);
+    const diagnostics = JSON.stringify(consoleError.mock.calls);
+    expect(diagnostics).toContain("Failed to deploy Discord guild commands");
+    expect(diagnostics).toContain("guildCount");
+    expect(diagnostics).not.toContain("guild-one");
+    expect(diagnostics).not.toContain("guild-two");
+    put.mockRestore();
+  });
+
   it.each([
     ["negative minimum", { minLength: -1 }],
     ["zero maximum", { maxLength: 0 }],
