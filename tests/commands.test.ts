@@ -295,6 +295,7 @@ describe("command contracts", () => {
     const deploymentError = new Error("synthetic guild failure");
     const put = vi
       .spyOn(discordJs.REST.prototype, "put")
+      .mockResolvedValue({} as never)
       .mockResolvedValueOnce({} as never)
       .mockRejectedValueOnce(deploymentError);
     const consoleError = vi
@@ -304,6 +305,7 @@ describe("command contracts", () => {
     await expect(
       Discord.deployCommands([command], ["guild-one", "guild-two"]),
     ).rejects.toBe(deploymentError);
+    expect(put).toHaveBeenCalledTimes(3);
     const diagnostics = JSON.stringify(consoleError.mock.calls);
     expect(diagnostics).toContain("Failed to deploy Discord guild commands");
     expect(diagnostics).toContain("guildCount");
