@@ -31,10 +31,10 @@ This repository is the template itself. It is not a deployable bot and it must n
 
 1. Open the [Discord Developer Portal](https://discord.com/developers/applications) and create an application.
 2. In **General Information**, save the Application ID.
-3. In **Installation**, keep **Guild Install** as the only context method and disable the install link.
-4. In **OAuth2**, disable **Public Client**. Create a guild-install URL with the `bot` and `applications.commands` scopes and only the permissions the application needs. The shared channel-message helper may need **View Channel** and **Send Messages**.
+3. In **Installation**, keep **Guild Install** enabled and leave **User Install** disabled. Guild Install adds the bot to a server; User Install adds an app to an individual user's account and is limited to commands rather than adding a bot member to a server.
+4. In **Installation**, select **Discord Provided Link** under **Install Link**. In **Default Install Settings** for **Guild Install**, select the `bot` and `applications.commands` scopes. The `bot` scope installs the bot user in the selected server; `applications.commands` enables the app's slash and other application commands (it is included by default with `bot`). When the bot scope reveals **Permissions**, select only what the application needs. The shared channel-message helper may need **View Channel** and **Send Messages**.
 5. In **Bot**, reset and save the token. Keep privileged gateway intents disabled; the template requests only the non-privileged `Guilds` intent.
-6. Install the bot in a test server using the generated URL.
+6. Copy the **Default Install Link** generated on the **Installation** page, open it in a browser, choose **Add to server**, select a test server where you can manage the server, and complete the authorization prompt. This installation link adds the bot; it is not a user OAuth login or authentication flow, so this template does not need OAuth redirect URLs or user-token exchanges.
 
 Gateway intents, OAuth2 scopes, and bot permissions are separate controls. Enable additional intents or permissions only when application code requires them.
 

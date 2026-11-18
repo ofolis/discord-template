@@ -21,7 +21,7 @@ const TEMPLATE_HASHES = {
   "package-lock.json":
     "965e37ea4abd17b9eb5e67327b38a9e81088a3ca624c6ca4f0d10c5924d5133b",
   "README.md":
-    "98e6064a0c690f4a9621d7a41f90ade4622c5ab47f7a539c2f461222b5801149",
+    "59f6eea5aaa7d291f0697075401f00b4e08e740bbb243d6256c73983dcc04efd",
 };
 
 function fail(message) {

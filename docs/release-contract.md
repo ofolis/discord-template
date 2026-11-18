@@ -12,7 +12,7 @@ Enable GitHub Actions, allow all actions and reusable workflows, and use `Main C
 
 ### Pull request merging
 
-Enable **Squash and merge** and disable merge commits and rebase merging. Set the default squash commit message to **Pull request title**, enable automatic deletion of merged branches, and keep auto-merge optional.
+Enable merge commits and disable **Squash and merge** and rebase merging. Enable automatic deletion of merged branches, and keep auto-merge optional. The repository uses Conventional Commits, with Commitizen available to help create them.
 
 ### Branch protection
 
@@ -21,7 +21,7 @@ Create an active ruleset targeting the default branch with these requirements:
 - Require pull requests before merging.
 - Require the `Main CI` status check.
 - Require resolution of review conversations.
-- Require linear history.
+- Protect `main`; do not require linear history.
 - Block force pushes and branch deletion.
 - Do not require a second human approval for a single-maintainer repository.
 - Do not require a merge queue.
@@ -30,7 +30,9 @@ Create an active ruleset targeting the default branch with these requirements:
 
 ### Semantic versioning
 
-Semantic-release analyzes the final squash commit on `main`. Use Conventional Commit pull request titles so the squash commit communicates the intended release: `fix:` produces a patch release, `feat:` produces a minor release, `feat!:` produces a major release, and `docs:` produces no release under the current configuration. Other Conventional Commit types and breaking-change footers are also supported according to the release configuration. Squash merging is recommended for preserving one final analyzed commit, but it is not technically required by semantic-release.
+Semantic-release analyzes the analyzable Conventional Commit history on `main`. Under this repository's merge-commit convention, preserve the individual Conventional Commit messages when merging a pull request so semantic-release can evaluate each commit's release impact. `fix:` produces a patch release, `feat:` produces a minor release, `feat!:` produces a major release, and `docs:` produces no release under the current configuration. Other Conventional Commit types and breaking-change footers are also supported according to the release configuration.
+
+Merge commits are a repository convention for preserving that history; semantic-release does not require merge commits. PR titles are not the authoritative input for release classification under this workflow, and squash commit messages are not used to determine the release version.
 
 ## Semantic release
 
