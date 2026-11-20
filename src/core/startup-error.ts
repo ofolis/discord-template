@@ -85,7 +85,43 @@ export function asStartupDiagnostic(
   startupCode: StartupDiagnosticCode,
   operation: string,
 ): StartupDiagnosticError {
-  if (isStartupDiagnostic(reason)) return reason;
+  if (isStartupDiagnostic(reason)) {
+    const existingMessage: unknown = readSafeProperty(reason, "message");
+    const existingStartupCode: unknown = readSafeProperty(
+      reason,
+      "startupCode",
+    );
+    const existingConfigField: unknown = readSafeProperty(
+      reason,
+      "configField",
+    );
+    const existingOperation: unknown = readSafeProperty(reason, "operation");
+    const existingPlatformCode: unknown = readSafeProperty(
+      reason,
+      "platformCode",
+    );
+    return new StartupDiagnosticError(
+      isStartupDiagnosticCode(existingStartupCode)
+        ? existingStartupCode
+        : startupCode,
+      {
+        message:
+          typeof existingMessage === "string" ? existingMessage : undefined,
+        configField:
+          typeof existingConfigField === "string"
+            ? existingConfigField
+            : undefined,
+        operation:
+          typeof existingOperation === "string" ? existingOperation : operation,
+        platformCode:
+          typeof existingPlatformCode === "string" ||
+          (typeof existingPlatformCode === "number" &&
+            Number.isFinite(existingPlatformCode))
+            ? existingPlatformCode
+            : undefined,
+      },
+    );
+  }
   const errorLike: boolean = isError(reason);
   const message: unknown = errorLike
     ? readSafeProperty(reason, "message")
@@ -111,6 +147,16 @@ function isStartupDiagnostic(value: unknown): value is StartupDiagnosticError {
   } catch {
     return false;
   }
+}
+
+function isStartupDiagnosticCode(
+  value: unknown,
+): value is StartupDiagnosticCode {
+  return (
+    value === "CONFIG_INVALID" ||
+    value === "DISCORD_INITIALIZATION_FAILED" ||
+    value === "STARTUP_UNEXPECTED"
+  );
 }
 
 function isError(value: unknown): boolean {

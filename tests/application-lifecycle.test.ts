@@ -5,7 +5,13 @@ import {
   ApplicationLifecycle,
   ApplicationLifecycleState,
 } from "../src/application-lifecycle";
-import { JsonStore, Log, configurationError } from "../src/core";
+import {
+  configurationError,
+  JsonStore,
+  Log,
+  reportStartupFailure,
+  StartupDiagnosticError,
+} from "../src/core";
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -716,6 +722,50 @@ describe("ApplicationLifecycle", () => {
       ),
     ).toHaveLength(1);
     expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+  });
+
+  it("cleans up when a startup diagnostic proxy rejects with throwing metadata", async () => {
+    const client = new FakeClient();
+    const store = {
+      drain: vi.fn<() => Promise<void>>(() => Promise.resolve()),
+      initialize: (): Promise<void> => Promise.resolve(),
+    };
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const diagnostic = new Proxy(
+      new StartupDiagnosticError("DISCORD_INITIALIZATION_FAILED", {
+        operation: "discord-login",
+      }),
+      {
+        get: (): never => {
+          throw new Error("diagnostic metadata secret");
+        },
+      },
+    );
+    client.login.mockRejectedValue(diagnostic);
+    const lifecycle = createLifecycle(client, store);
+
+    let failure: unknown;
+    try {
+      await lifecycle.start();
+    } catch (reason: unknown) {
+      failure = reason;
+    }
+    reportStartupFailure(failure);
+
+    expect(store.drain).toHaveBeenCalledOnce();
+    expect(client.destroy).toHaveBeenCalledOnce();
+    expect(lifecycle.state).toBe("stopped");
+    expect(client.listenerCount("error")).toBe(0);
+    expect(client.listenerCount("clientReady")).toBe(0);
+    expect(client.listenerCount("guildCreate")).toBe(0);
+    expect(client.listenerCount("interactionCreate")).toBe(0);
+    expect(process.exitCode).toBe(1);
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+      "diagnostic metadata secret",
+    );
     process.exitCode = undefined;
   });
 
