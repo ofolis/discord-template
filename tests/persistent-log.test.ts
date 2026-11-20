@@ -135,6 +135,63 @@ describe("persistent logging", () => {
     );
   });
 
+  it("discards unrestricted top-level primitives and arrays while preserving safe structured data", async () => {
+    const directory: string = await createLogDirectory();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    vi.spyOn(Environment, "config", "get").mockReturnValue({
+      devMode: true,
+    } as never);
+    Log.initialize({ directory, devMode: true });
+    const error = Object.assign(new Error("exception=synthetic-secret"), {
+      code: "E_SYNTHETIC",
+      stack: "synthetic stack",
+      status: 403,
+    });
+    const diagnosticArray: unknown[] = [
+      "array-secret",
+      { token: "synthetic-secret" },
+    ];
+
+    Log.error(
+      "Mixed diagnostic input.",
+      "token=synthetic-secret",
+      "exception=synthetic-secret",
+      42,
+      true,
+      BigInt(1),
+      diagnosticArray,
+      error,
+      {
+        count: 3,
+        message: "message=synthetic-secret",
+        result: ["nested-value", { status: "ok", token: "synthetic-secret" }],
+        token: "synthetic-secret",
+      },
+    );
+    await Log.flush();
+
+    const [record] = await readLogRecords(directory);
+    expect(record).toMatchObject({
+      fields: {
+        count: 3,
+        errorCode: "E_SYNTHETIC",
+        errorName: "Error",
+        result: {
+          values: ["nested-value", { status: "ok" }],
+        },
+        status: "403",
+      },
+    });
+    expect(record.fields).not.toHaveProperty("value0");
+    expect(record.fields).not.toHaveProperty("values");
+    expect(JSON.stringify(record)).not.toContain("synthetic-secret");
+    expect(JSON.stringify(record)).not.toContain("synthetic stack");
+    expect(consoleError).toHaveBeenCalledTimes(9);
+    expect(consoleError.mock.calls[1]?.[1]).toBe("token=synthetic-secret");
+  });
+
   it("persists trusted event identifiers while sanitizing event fields", async () => {
     const directory: string = await createLogDirectory();
     vi.spyOn(Environment, "config", "get").mockReturnValue({

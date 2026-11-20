@@ -468,7 +468,9 @@ export class Log {
     };
     const fields: Record<string, unknown> = {};
     data.forEach(item => {
-      this.__collectFields(item, fields, new WeakSet());
+      if (typeof item === "object" && item !== null && !Array.isArray(item)) {
+        this.__collectFields(item, fields, new WeakSet());
+      }
     });
     if (Object.keys(fields).length > 0) record.fields = fields;
     let serialized: string;
