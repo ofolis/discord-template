@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  StartupDiagnosticError,
+  asStartupDiagnostic,
   configurationError,
   reportStartupFailure,
+  StartupDiagnosticError,
 } from "../src/core";
 
 afterEach(() => {
@@ -10,6 +11,33 @@ afterEach(() => {
 });
 
 describe("startup diagnostics", () => {
+  it.each([
+    [50001, "50001"],
+    ["E_DISCORD", "E_DISCORD"],
+  ] as const)("normalizes safe platform code %s", (code, expected) => {
+    const diagnostic = asStartupDiagnostic(
+      Object.assign(new Error("token=synthetic-secret"), { code }),
+      "DISCORD_INITIALIZATION_FAILED",
+      "discord-login",
+    );
+    expect(diagnostic.platformCode).toBe(expected);
+  });
+
+  it.each([
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    { code: "50001" },
+    "not valid!",
+  ])("rejects unsafe platform code %s", code => {
+    const diagnostic = asStartupDiagnostic(
+      Object.assign(new Error("synthetic"), { code }),
+      "DISCORD_INITIALIZATION_FAILED",
+      "discord-login",
+    );
+    expect(diagnostic.platformCode).toBeUndefined();
+  });
+
   it("reports a safe configuration classification and field", () => {
     const consoleError = vi
       .spyOn(console, "error")

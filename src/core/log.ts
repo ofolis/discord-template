@@ -43,6 +43,7 @@ const allowedKeys: ReadonlySet<string> = new Set([
   "category",
   "code",
   "count",
+  "commandcount",
   "configfield",
   "correlationid",
   "duration",
@@ -50,6 +51,7 @@ const allowedKeys: ReadonlySet<string> = new Set([
   "errorcode",
   "errorname",
   "failed",
+  "guildcount",
   "httpstatus",
   "id",
   "ids",
@@ -124,6 +126,8 @@ export class Log {
   private static __fileReady: Promise<void> | undefined;
 
   private static __flushWaiters: Array<() => void> = [];
+
+  private static __lastCleanupDate: string | undefined;
 
   private static __pending: PendingRecord[] = [];
 
@@ -248,7 +252,12 @@ export class Log {
       now: options.now ?? (() => new Date()),
     };
     this.__fileReady = mkdir(options.directory, { recursive: true })
-      .then(() => this.__cleanupExpiredFiles())
+      .then(async () => {
+        await this.__cleanupExpiredFiles();
+        const readyOptions: Required<FileLogOptions> = this
+          .__fileOptions as Required<FileLogOptions>;
+        this.__lastCleanupDate = this.__datePart(readyOptions.now());
+      })
       .catch(reason => {
         this.__disablePersistentSink(reason);
       });
@@ -263,6 +272,7 @@ export class Log {
     this.__draining = false;
     this.__flushWaiters = [];
     this.__fileFailureReported = false;
+    this.__lastCleanupDate = undefined;
     this.__persistentSinkDisabled = false;
     this.__droppedRecords = 0;
     this.__queueDropReported = false;
@@ -334,6 +344,15 @@ export class Log {
         })
         .map(({ entry }) => unlink(path.join(options.directory, entry))),
     );
+  }
+
+  private static async __cleanupOnDateChange(): Promise<void> {
+    const options: Required<FileLogOptions> = this
+      .__fileOptions as Required<FileLogOptions>;
+    const currentDate: string = this.__datePart(options.now());
+    if (currentDate === this.__lastCleanupDate) return;
+    await this.__cleanupExpiredFiles();
+    this.__lastCleanupDate = currentDate;
   }
 
   private static __collectFields(
@@ -417,6 +436,7 @@ export class Log {
         !this.__persistentSinkDisabled
       ) {
         const pending: PendingRecord = this.__pending.shift() as PendingRecord;
+        await this.__cleanupOnDateChange();
         await this.__writeRecord(pending);
       }
     } catch (reason: unknown) {

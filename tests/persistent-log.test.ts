@@ -2,7 +2,12 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Environment, Log, configurationError } from "../src/core";
+import {
+  Environment,
+  Log,
+  asStartupDiagnostic,
+  configurationError,
+} from "../src/core";
 
 const temporaryDirectories: string[] = [];
 
@@ -160,6 +165,41 @@ describe("persistent logging", () => {
     expect(JSON.stringify(record)).not.toContain("synthetic stack");
   });
 
+  it("persists deployment counts and safe error summaries without exception content", async () => {
+    const directory: string = await createLogDirectory();
+    vi.spyOn(Environment, "config", "get").mockReturnValue({
+      devMode: true,
+    } as never);
+    Log.initialize({ directory, devMode: true });
+    const error = Object.assign(new Error("token=synthetic-secret"), {
+      code: "50001",
+      status: 403,
+      stack: "synthetic stack",
+    });
+
+    Log.error("Failed to deploy Discord guild commands.", {
+      CommandCount: 3,
+      GUILDCOUNT: 2,
+      ...Log.summarizeError(error),
+      message: error.message,
+      payload: { token: "synthetic-secret" },
+    });
+    await Log.flush();
+
+    const [record] = await readLogRecords(directory);
+    expect(record).toMatchObject({
+      fields: {
+        CommandCount: 3,
+        GUILDCOUNT: 2,
+        errorCode: "50001",
+        errorName: "Error",
+        status: "403",
+      },
+    });
+    expect(JSON.stringify(record)).not.toContain("synthetic-secret");
+    expect(JSON.stringify(record)).not.toContain("synthetic stack");
+  });
+
   it("persists safe startup diagnostic metadata without the failure details", async () => {
     const directory: string = await createLogDirectory();
     vi.spyOn(Environment, "config", "get").mockReturnValue({
@@ -189,6 +229,39 @@ describe("persistent logging", () => {
     });
     expect(JSON.stringify(record)).not.toContain("synthetic-secret");
     expect(JSON.stringify(record)).not.toContain("Configuration value");
+  });
+
+  it("persists normalized numeric startup platform codes safely", async () => {
+    const directory: string = await createLogDirectory();
+    vi.spyOn(Environment, "config", "get").mockReturnValue({
+      devMode: true,
+    } as never);
+    Log.initialize({ directory, devMode: true });
+    const diagnostic = asStartupDiagnostic(
+      Object.assign(new Error("token=synthetic-secret"), {
+        code: 50001,
+        stack: "synthetic stack",
+      }),
+      "DISCORD_INITIALIZATION_FAILED",
+      "discord-login",
+    );
+    Log.event("APPLICATION_STARTUP_FAILED", "ERROR", {
+      category: diagnostic.startupCode,
+      operation: diagnostic.operation,
+      platformCode: diagnostic.platformCode,
+    });
+    await Log.flush();
+
+    const [record] = await readLogRecords(directory);
+    expect(record).toMatchObject({
+      fields: {
+        category: "DISCORD_INITIALIZATION_FAILED",
+        operation: "discord-login",
+        platformCode: "50001",
+      },
+    });
+    expect(JSON.stringify(record)).not.toContain("synthetic-secret");
+    expect(JSON.stringify(record)).not.toContain("synthetic stack");
   });
 
   it("rejects invalid event identifiers without exposing their values", async () => {
@@ -442,6 +515,65 @@ describe("persistent logging", () => {
       pendingRecords: 0,
     });
     expect(consoleError).toHaveBeenCalledTimes(1);
+  });
+
+  it("cleans expired files once when continued logging crosses a UTC date", async () => {
+    const directory: string = await createLogDirectory();
+    const expiredPath: string = join(
+      directory,
+      "application-logs-2026-11-01.jsonl",
+    );
+    await writeFile(expiredPath, "expired\n");
+    await writeFile(
+      join(directory, "application-logs-2026-11-15.jsonl"),
+      "unexpired\n",
+    );
+    await writeFile(join(directory, "unrelated.jsonl"), "keep\n");
+    vi.spyOn(Environment, "config", "get").mockReturnValue({
+      devMode: false,
+    } as never);
+    let now: Date = new Date("2026-11-16T12:00:00.000Z");
+    const internals: LogInternals & {
+      __cleanupExpiredFiles: () => Promise<void>;
+    } = Log as unknown as LogInternals & {
+      __cleanupExpiredFiles: () => Promise<void>;
+    };
+    const originalCleanup = internals.__cleanupExpiredFiles;
+    let cleanupCount = 0;
+    internals.__cleanupExpiredFiles = async (): Promise<void> => {
+      cleanupCount += 1;
+      await originalCleanup.call(Log);
+    };
+    Log.initialize({
+      directory,
+      devMode: false,
+      retentionDays: 7,
+      now: () => now,
+    });
+    Log.info("Initial event.");
+    await Log.flush();
+    expect(cleanupCount).toBe(1);
+    await writeFile(expiredPath, "expired again\n");
+
+    now = new Date("2026-11-17T12:00:00.000Z");
+    Log.info("Rollover event.");
+    Log.info("Same-day event.");
+    await Log.flush();
+
+    expect(cleanupCount).toBe(2);
+    await expect(readFile(expiredPath, "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    expect(
+      await readFile(
+        join(directory, "application-logs-2026-11-15.jsonl"),
+        "utf8",
+      ),
+    ).toBe("unexpired\n");
+    expect(await readFile(join(directory, "unrelated.jsonl"), "utf8")).toBe(
+      "keep\n",
+    );
+    internals.__cleanupExpiredFiles = originalCleanup;
   });
 
   it("drops oldest records deterministically while a drain is blocked", async () => {

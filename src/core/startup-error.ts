@@ -8,7 +8,7 @@ export type StartupDiagnosticOptions = {
   readonly configField?: string;
   readonly message?: string;
   readonly operation?: string;
-  readonly platformCode?: string;
+  readonly platformCode?: number | string;
 };
 
 export class StartupDiagnosticError extends Error {
@@ -55,10 +55,17 @@ export class StartupDiagnosticError extends Error {
   }
 
   private static __safePlatformCode(
-    value: string | undefined,
+    value: number | string | undefined,
   ): string | undefined {
-    return value !== undefined && /^[A-Za-z0-9_.:-]{1,64}$/u.test(value)
-      ? value
+    const normalized: string | undefined =
+      typeof value === "number"
+        ? Number.isFinite(value)
+          ? String(value)
+          : undefined
+        : value;
+    return normalized !== undefined &&
+      /^[A-Za-z0-9_.:-]{1,64}$/u.test(normalized)
+      ? normalized
       : undefined;
   }
 }
@@ -86,8 +93,8 @@ export function asStartupDiagnostic(
     message: reason instanceof Error ? reason.message : undefined,
     operation,
     platformCode:
-      typeof platformCode === "string" &&
-      /^[A-Za-z0-9_.:-]{1,64}$/u.test(platformCode)
+      typeof platformCode === "string" ||
+      (typeof platformCode === "number" && Number.isFinite(platformCode))
         ? platformCode
         : undefined,
   });
