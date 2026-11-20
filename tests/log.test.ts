@@ -78,6 +78,32 @@ describe("logging", () => {
     );
   });
 
+  it("summarizes adversarial error metadata without throwing", () => {
+    const error = new Proxy(new Error("raw exception stack"), {
+      get(_target, property): unknown {
+        if (
+          property === "name" ||
+          property === "code" ||
+          property === "status" ||
+          property === "statusCode" ||
+          property === "cause"
+        ) {
+          throw new Error("diagnostic getter secret");
+        }
+        return Reflect.get(_target, property) as unknown;
+      },
+      has: (): never => {
+        throw new Error("has trap secret");
+      },
+    });
+
+    expect(() => Log.summarizeError(error)).not.toThrow();
+    expect(Log.summarizeError(error)).toStrictEqual({ errorName: "Error" });
+    expect(JSON.stringify(Log.summarizeError(error))).not.toContain(
+      "raw exception stack",
+    );
+  });
+
   it("does not log persisted JSON when a key is missing", () => {
     const consoleError = vi
       .spyOn(console, "error")

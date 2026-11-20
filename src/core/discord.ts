@@ -230,7 +230,7 @@ export class Discord {
     } catch (reason: unknown) {
       Log.error("Failed to deploy global Discord commands.", {
         commandCount: commands.length,
-        error: Log.summarizeError(reason),
+        ...Log.summarizeError(reason),
       });
       throw reason;
     }
@@ -264,7 +264,7 @@ export class Discord {
       Log.error("Failed to deploy Discord guild commands.", {
         commandCount: commands.length,
         guildCount: guildIds.length,
-        error: Log.summarizeError(reason),
+        ...Log.summarizeError(reason),
       });
       throw reason;
     }

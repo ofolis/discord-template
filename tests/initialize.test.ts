@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await, @typescript-eslint/explicit-function-return-type, require-await */
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   cpSync,
   mkdirSync,
@@ -18,6 +19,7 @@ import {
   initializeRepository,
   parseArguments,
   replaceFile,
+  TEMPLATE_HASHES,
 } from "../scripts/initialize.mjs";
 
 const repositoryRoot = process.cwd();
@@ -145,6 +147,19 @@ describe("initializer input validation", () => {
 });
 
 describe("repository initialization", () => {
+  it("keeps the canonical README, pristine fixture, and fingerprint synchronized", () => {
+    const canonicalReadme: Buffer = readFileSync(
+      join(repositoryRoot, "README.md"),
+    );
+    const pristineReadme: Buffer = readFileSync(
+      join(pristineTemplateRoot, "README.md"),
+    );
+    expect(pristineReadme.equals(canonicalReadme)).toBe(true);
+    expect(createHash("sha256").update(pristineReadme).digest("hex")).toBe(
+      TEMPLATE_HASHES["README.md"],
+    );
+  });
+
   it("updates identity, README, and marker without adding a version", async () => {
     const cwd = fixture();
     await expect(initializeRepository({ cwd, argv: args() })).resolves.toEqual({

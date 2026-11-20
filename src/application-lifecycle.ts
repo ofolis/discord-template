@@ -1,8 +1,10 @@
 import * as discordJs from "discord.js";
+import { join, resolve } from "path";
 import { Ping } from "./commands";
 import { DataController } from "./controllers";
 import type { CoreConfig } from "./core";
 import {
+  asStartupDiagnostic,
   Command,
   Discord,
   Environment,
@@ -10,6 +12,7 @@ import {
   isSupportedCommandInteraction,
   JsonStore,
   Log,
+  StartupDiagnosticError,
 } from "./core";
 
 export type ApplicationLifecycleState =
@@ -28,11 +31,14 @@ type LifecycleDependencies = {
     commands: Command[],
     guildIds?: string[],
   ) => Promise<void>;
+  readonly flushLogging?: (timeoutMilliseconds: number) => Promise<void>;
+  readonly initializeLogging?: (directory: string, devMode: boolean) => void;
   readonly loadConfig?: () => CoreConfig;
 };
 
 type TimedStageResult = {
   completed: boolean;
+  failed: boolean;
 };
 
 export class ApplicationLifecycle {
@@ -63,15 +69,26 @@ export class ApplicationLifecycle {
     guildIds?: string[],
   ) => Promise<void>;
 
+  private readonly __flushLogging: (
+    timeoutMilliseconds: number,
+  ) => Promise<void>;
+
   private __guildCreateListener: ((guild: discordJs.Guild) => void) | undefined;
 
   private __initialDeploymentPromise: Promise<void> = Promise.resolve();
+
+  private readonly __initializeLogging: (
+    directory: string,
+    devMode: boolean,
+  ) => void;
 
   private __interactionListener:
     | ((interaction: discordJs.Interaction) => void)
     | undefined;
 
   private readonly __loadConfig: () => CoreConfig;
+
+  private __loggingInitialized: boolean = false;
 
   private __readyObserved: boolean = false;
 
@@ -82,6 +99,8 @@ export class ApplicationLifecycle {
   private __shutdownRequested: Promise<void>;
 
   private __signalListenersInstalled: boolean = false;
+
+  private __startPromise: Promise<void> | undefined;
 
   private __state: ApplicationLifecycleState = "starting";
 
@@ -102,6 +121,15 @@ export class ApplicationLifecycle {
       dependencies.deployCommands ??
       ((commands: Command[], guildIds?: string[]): Promise<void> =>
         Discord.deployCommands(commands, guildIds));
+    this.__initializeLogging =
+      dependencies.initializeLogging ??
+      ((directory: string, devMode: boolean): void => {
+        Log.initialize({ directory, devMode });
+      });
+    this.__flushLogging =
+      dependencies.flushLogging ??
+      ((timeoutMilliseconds: number): Promise<void> =>
+        Log.flush(timeoutMilliseconds));
     this.__shutdownRequested = new Promise(resolve => {
       this.__resolveShutdownRequested = resolve;
     });
@@ -138,48 +166,12 @@ export class ApplicationLifecycle {
     return this.__shutdownPromise;
   }
 
-  public async start(): Promise<void> {
-    try {
-      const config: CoreConfig = this.__loadConfig();
-      this.__assertStarting();
-      if (config.devMode) {
-        Log.info("Running in development mode.");
-      }
-      Log.info(
-        `Initializing ${Environment.packageContext.name} (${Environment.packageContext.version ?? "DEVELOPMENT"}, ${Environment.packageContext.commitSha ?? "NO COMMIT SHA"})...`,
-      );
-
-      this.__store = this.__createStore(config.dataDirectory);
-      await this.__store.initialize();
-      this.__assertStarting();
-
-      this.__commands = this.__createCommands(this.__store);
-      this.__assertStarting();
-
-      this.__client = this.__createClient();
-      this.__registerClientListeners();
-
-      const loginPromise: Promise<string> = this.__client.login(
-        config.discordBotToken,
-      );
-      void loginPromise.catch(() => undefined);
-      await this.__awaitStartupOperation(loginPromise);
-      this.__assertStarting();
-      Log.success("Discord client logged in successfully.");
-
-      await this.__awaitStartupOperation(this.__initialDeploymentPromise);
-      this.__assertStarting();
-
-      this.__state = "running";
-      Log.success("Application started successfully.");
-    } catch (reason: unknown) {
-      if (this.__state === "stopping" || this.__state === "stopped") {
-        await this.__shutdownPromise;
-        return;
-      }
-      await this.shutdown(true);
-      throw reason;
+  public start(): Promise<void> {
+    if (this.__startPromise !== undefined) {
+      return this.__startPromise;
     }
+    this.__startPromise = this.__performStart();
+    return this.__startPromise;
   }
 
   private __assertStarting(): void {
@@ -210,7 +202,13 @@ export class ApplicationLifecycle {
 
   private async __performShutdown(startupFailure: boolean): Promise<void> {
     const deadline: number = performance.now() + shutdownDeadlineMilliseconds;
-    let timedOut: boolean = false;
+    let cleanupTimedOut: boolean = false;
+
+    if (this.__loggingInitialized) {
+      Log.event("APPLICATION_SHUTDOWN_INITIATED", "INFO", {
+        failed: startupFailure,
+      });
+    }
 
     const acceptedWork: Promise<unknown>[] = [
       ...this.__activeHandlers,
@@ -220,14 +218,14 @@ export class ApplicationLifecycle {
       Promise.allSettled(acceptedWork).then(() => undefined),
       deadline,
     );
-    timedOut ||= !workResult.completed;
+    cleanupTimedOut ||= !workResult.completed;
 
     if (this.__store !== undefined) {
       const storeResult: TimedStageResult = await this.__settleWithin(
         Promise.resolve().then(() => this.__store?.drain()),
         deadline,
       );
-      timedOut ||= !storeResult.completed;
+      cleanupTimedOut ||= !storeResult.completed;
     }
 
     if (this.__client !== undefined) {
@@ -235,24 +233,142 @@ export class ApplicationLifecycle {
         Promise.resolve().then(() => this.__client?.destroy()),
         deadline,
       );
-      timedOut ||= !clientResult.completed;
+      cleanupTimedOut ||= !clientResult.completed;
+    }
+
+    const remaining: number = Math.max(0, deadline - performance.now());
+    const cleanupFailed: boolean = cleanupTimedOut || this.__cleanupFailed;
+    if (cleanupFailed && this.__loggingInitialized) {
+      Log.event("APPLICATION_SHUTDOWN_FAILED", "ERROR", {
+        failed: true,
+        timeout: cleanupTimedOut,
+      });
+    }
+    if (!cleanupFailed && this.__loggingInitialized) {
+      Log.event("APPLICATION_SHUTDOWN_COMPLETED", "SUCCESS", {
+        failed: false,
+      });
+    }
+    const flushResult: TimedStageResult = await this.__settleWithin(
+      Promise.resolve().then(() => this.__flushLogging(remaining)),
+      deadline,
+      "Application log flush",
+      false,
+    );
+    if (!flushResult.completed) {
+      console.error("Application log flush deadline exceeded.");
     }
 
     this.__removeClientListeners();
     this.__removeSignalListeners();
     this.__state = "stopped";
 
-    if (!startupFailure && !timedOut && !this.__cleanupFailed) {
-      Log.success("Application shut down gracefully.");
-    }
-    if (startupFailure || timedOut || this.__cleanupFailed) {
+    if (
+      startupFailure ||
+      cleanupFailed ||
+      flushResult.failed ||
+      !flushResult.completed
+    ) {
       process.exitCode = 1;
     }
-    if (timedOut) {
+    if (cleanupTimedOut) {
       console.error("Application shutdown deadline exceeded.", {
         activeHandlerCount: this.__activeHandlers.size,
         activeRegistrationCount: this.__activeRegistrations.size,
       });
+    }
+  }
+
+  private async __performStart(): Promise<void> {
+    try {
+      const config: CoreConfig = this.__loadConfig();
+      this.__assertStarting();
+      this.__loggingInitialized = true;
+      try {
+        this.__initializeLogging(
+          resolve(
+            config.devMode ? "./logs" : join(config.dataDirectory, "logs"),
+          ),
+          config.devMode,
+        );
+      } catch (reason: unknown) {
+        console.error(
+          "Persistent application logging unavailable.",
+          Log.summarizeError(reason),
+        );
+      }
+      Log.event("APPLICATION_STARTUP_INITIATED", "INFO");
+      if (config.devMode) {
+        Log.info("Running in development mode.");
+      }
+      Log.info(
+        `Initializing ${Environment.packageContext.name} (${Environment.packageContext.version ?? "DEVELOPMENT"}, ${Environment.packageContext.commitSha ?? "NO COMMIT SHA"})...`,
+      );
+
+      this.__store = this.__createStore(config.dataDirectory);
+      await this.__store.initialize();
+      this.__assertStarting();
+
+      this.__commands = this.__createCommands(this.__store);
+      this.__assertStarting();
+
+      this.__client = this.__createClient();
+      this.__registerClientListeners();
+
+      try {
+        const loginPromise: Promise<string> = this.__client.login(
+          config.discordBotToken,
+        );
+        void loginPromise.catch(() => undefined);
+        await this.__awaitStartupOperation(loginPromise);
+      } catch (reason: unknown) {
+        throw asStartupDiagnostic(
+          reason,
+          "DISCORD_INITIALIZATION_FAILED",
+          "discord-login",
+        );
+      }
+      this.__assertStarting();
+
+      try {
+        await this.__awaitStartupOperation(this.__initialDeploymentPromise);
+      } catch (reason: unknown) {
+        throw asStartupDiagnostic(
+          reason,
+          "DISCORD_INITIALIZATION_FAILED",
+          "discord-command-deployment",
+        );
+      }
+      this.__assertStarting();
+
+      this.__state = "running";
+      Log.event("APPLICATION_STARTUP_COMPLETED", "SUCCESS");
+    } catch (reason: unknown) {
+      if (this.__state === "stopping" || this.__state === "stopped") {
+        await this.__shutdownPromise;
+        return;
+      }
+      const diagnostic: StartupDiagnosticError = asStartupDiagnostic(
+        reason,
+        "STARTUP_UNEXPECTED",
+        "startup",
+      );
+      if (this.__loggingInitialized) {
+        Log.event("APPLICATION_STARTUP_FAILED", "ERROR", {
+          category: diagnostic.startupCode,
+          ...(diagnostic.configField === undefined
+            ? {}
+            : { configField: diagnostic.configField }),
+          ...(diagnostic.operation === undefined
+            ? {}
+            : { operation: diagnostic.operation }),
+          ...(diagnostic.platformCode === undefined
+            ? {}
+            : { platformCode: diagnostic.platformCode }),
+        });
+      }
+      await this.shutdown(true);
+      throw diagnostic;
     }
   }
 
@@ -268,6 +384,7 @@ export class ApplicationLifecycle {
           reject(new Error("Application shutdown requested before readiness."));
           return;
         }
+        Log.event("DISCORD_CLIENT_CONNECTED", "SUCCESS");
         let deployment: Promise<void>;
         try {
           deployment = this.__trackRegistration(
@@ -283,7 +400,7 @@ export class ApplicationLifecycle {
         }
         void deployment.then(
           () => {
-            Log.success("Initial Discord command deployment completed.", {
+            Log.event("COMMAND_DEPLOYMENT_COMPLETED", "SUCCESS", {
               commandCount: this.__commands.length,
             });
             resolve();
@@ -384,25 +501,26 @@ export class ApplicationLifecycle {
   private async __settleWithin(
     operation: Promise<unknown>,
     deadline: number,
+    failureContext: string = "Application cleanup",
+    markCleanupFailed: boolean = true,
   ): Promise<TimedStageResult> {
     let timer: NodeJS.Timeout | undefined;
     const completion: Promise<TimedStageResult> = operation.then(
       () => {
-        return { completed: true };
+        return { completed: true, failed: false };
       },
       (reason: unknown) => {
-        this.__cleanupFailed = true;
-        console.error(
-          "Application cleanup failed.",
-          Log.summarizeError(reason),
-        );
-        return { completed: true };
+        if (markCleanupFailed) {
+          this.__cleanupFailed = true;
+        }
+        console.error(`${failureContext} failed.`, Log.summarizeError(reason));
+        return { completed: true, failed: true };
       },
     );
     const remaining: number = Math.max(0, deadline - performance.now());
     const timeout: Promise<TimedStageResult> = new Promise(resolve => {
       timer = setTimeout((): void => {
-        resolve({ completed: false });
+        resolve({ completed: false, failed: false });
       }, remaining);
     });
     const result: TimedStageResult = await Promise.race([completion, timeout]);

@@ -21,7 +21,7 @@ const TEMPLATE_HASHES = {
   "package-lock.json":
     "965e37ea4abd17b9eb5e67327b38a9e81088a3ca624c6ca4f0d10c5924d5133b",
   "README.md":
-    "59f6eea5aaa7d291f0697075401f00b4e08e740bbb243d6256c73983dcc04efd",
+    "e84ca3b65c3955af3c58f3124b314461cdd00279db6b9524685fc7a54462731a",
 };
 
 function fail(message) {
@@ -343,5 +343,6 @@ export {
   initializeRepository,
   parseArguments,
   replaceFile,
+  TEMPLATE_HASHES,
   transformReadme,
 };
