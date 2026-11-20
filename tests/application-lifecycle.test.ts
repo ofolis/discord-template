@@ -670,6 +670,55 @@ describe("ApplicationLifecycle", () => {
     process.exitCode = undefined;
   });
 
+  it("cleans up when startup rejects with an error proxy", async () => {
+    const client = new FakeClient();
+    const events: string[] = [];
+    vi.spyOn(Log, "event").mockImplementation((eventCode: string): void => {
+      events.push(eventCode);
+    });
+    client.login.mockRejectedValue(
+      new Proxy(new Error("synthetic login failure"), {
+        getPrototypeOf: (): never => {
+          throw new Error("prototype trap failed");
+        },
+        get: (): never => {
+          throw new Error("get trap failed");
+        },
+        has: (): never => {
+          throw new Error("has trap failed");
+        },
+      }),
+    );
+    const lifecycle = createLifecycle(client);
+    const sigintListenersBefore: number = process.listenerCount("SIGINT");
+    const sigtermListenersBefore: number = process.listenerCount("SIGTERM");
+    lifecycle.installSignalHandlers();
+
+    await expect(lifecycle.start()).rejects.toMatchObject({
+      operation: "discord-login",
+      startupCode: "DISCORD_INITIALIZATION_FAILED",
+    });
+
+    expect(client.destroy).toHaveBeenCalledOnce();
+    expect(lifecycle.state).toBe("stopped");
+    expect(client.listenerCount("error")).toBe(0);
+    expect(client.listenerCount("clientReady")).toBe(0);
+    expect(client.listenerCount("guildCreate")).toBe(0);
+    expect(client.listenerCount("interactionCreate")).toBe(0);
+    expect(process.listenerCount("SIGINT")).toBe(sigintListenersBefore);
+    expect(process.listenerCount("SIGTERM")).toBe(sigtermListenersBefore);
+    expect(
+      events.filter(eventCode => eventCode === "APPLICATION_STARTUP_FAILED"),
+    ).toHaveLength(1);
+    expect(
+      events.filter(
+        eventCode => eventCode === "APPLICATION_SHUTDOWN_INITIATED",
+      ),
+    ).toHaveLength(1);
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+  });
+
   it("cancels startup when shutdown begins before login completes", async () => {
     const client = new FakeClient();
     const login = createDeferred<string>();

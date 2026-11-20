@@ -348,10 +348,11 @@ export class ApplicationLifecycle {
         await this.__shutdownPromise;
         return;
       }
-      const diagnostic: StartupDiagnosticError =
-        reason instanceof StartupDiagnosticError
-          ? reason
-          : asStartupDiagnostic(reason, "STARTUP_UNEXPECTED", "startup");
+      const diagnostic: StartupDiagnosticError = asStartupDiagnostic(
+        reason,
+        "STARTUP_UNEXPECTED",
+        "startup",
+      );
       if (this.__loggingInitialized) {
         Log.event("APPLICATION_STARTUP_FAILED", "ERROR", {
           category: diagnostic.startupCode,

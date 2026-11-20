@@ -85,12 +85,17 @@ export function asStartupDiagnostic(
   startupCode: StartupDiagnosticCode,
   operation: string,
 ): StartupDiagnosticError {
-  if (reason instanceof StartupDiagnosticError) return reason;
-  const platformCode: unknown =
-    reason instanceof Error && "code" in reason ? reason.code : undefined;
+  if (isStartupDiagnostic(reason)) return reason;
+  const errorLike: boolean = isError(reason);
+  const message: unknown = errorLike
+    ? readSafeProperty(reason, "message")
+    : undefined;
+  const platformCode: unknown = errorLike
+    ? readSafeProperty(reason, "code")
+    : undefined;
   return new StartupDiagnosticError(startupCode, {
     cause: reason,
-    message: reason instanceof Error ? reason.message : undefined,
+    message: typeof message === "string" ? message : undefined,
     operation,
     platformCode:
       typeof platformCode === "string" ||
@@ -98,4 +103,35 @@ export function asStartupDiagnostic(
         ? platformCode
         : undefined,
   });
+}
+
+function isStartupDiagnostic(value: unknown): value is StartupDiagnosticError {
+  try {
+    return value instanceof StartupDiagnosticError;
+  } catch {
+    return false;
+  }
+}
+
+function isError(value: unknown): boolean {
+  try {
+    return value instanceof Error;
+  } catch {
+    return false;
+  }
+}
+
+function readSafeProperty(value: unknown, property: string): unknown {
+  try {
+    if (
+      (typeof value !== "object" && typeof value !== "function") ||
+      value === null ||
+      !(property in value)
+    ) {
+      return undefined;
+    }
+    return (value as Record<string, unknown>)[property];
+  } catch {
+    return undefined;
+  }
 }

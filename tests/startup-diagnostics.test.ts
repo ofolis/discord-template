@@ -38,6 +38,66 @@ describe("startup diagnostics", () => {
     expect(diagnostic.platformCode).toBeUndefined();
   });
 
+  it("normalizes errors with throwing metadata accessors", () => {
+    const codeError = new Error("synthetic");
+    Object.defineProperty(codeError, "code", {
+      configurable: true,
+      get: (): never => {
+        throw new Error("code getter failed");
+      },
+    });
+    const messageError = new Error("synthetic");
+    Object.defineProperty(messageError, "message", {
+      configurable: true,
+      get: (): never => {
+        throw new Error("message getter failed");
+      },
+    });
+
+    expect(() =>
+      asStartupDiagnostic(codeError, "STARTUP_UNEXPECTED", "startup"),
+    ).not.toThrow();
+    expect(() =>
+      asStartupDiagnostic(messageError, "STARTUP_UNEXPECTED", "startup"),
+    ).not.toThrow();
+    expect(
+      asStartupDiagnostic(codeError, "STARTUP_UNEXPECTED", "startup"),
+    ).toMatchObject({
+      startupCode: "STARTUP_UNEXPECTED",
+      operation: "startup",
+      platformCode: undefined,
+    });
+    expect(
+      asStartupDiagnostic(messageError, "STARTUP_UNEXPECTED", "startup")
+        .message,
+    ).toBe("Application startup failed.");
+  });
+
+  it.each([
+    new Proxy(new Error("synthetic"), {
+      has: (): never => {
+        throw new Error("has trap failed");
+      },
+    }),
+    new Proxy(new Error("synthetic"), {
+      get: (): never => {
+        throw new Error("get trap failed");
+      },
+    }),
+    { reason: "synthetic" },
+  ])("normalizes inaccessible and non-Error thrown values safely", reason => {
+    expect(() => {
+      const diagnostic = asStartupDiagnostic(
+        reason,
+        "STARTUP_UNEXPECTED",
+        "startup",
+      );
+      expect(diagnostic.startupCode).toBe("STARTUP_UNEXPECTED");
+      expect(diagnostic.operation).toBe("startup");
+      expect(diagnostic.platformCode).toBeUndefined();
+    }).not.toThrow();
+  });
+
   it("reports a safe configuration classification and field", () => {
     const consoleError = vi
       .spyOn(console, "error")
