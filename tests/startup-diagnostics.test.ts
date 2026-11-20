@@ -205,4 +205,32 @@ describe("startup diagnostics", () => {
     );
     expect(JSON.stringify(consoleError.mock.calls)).not.toContain("raw secret");
   });
+
+  it("reports adversarial startup failures without reading unsafe properties", () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const reason = new Proxy(new Error("raw exception stack"), {
+      get: (): never => {
+        throw new Error("startup diagnostic getter secret");
+      },
+      getPrototypeOf: (): never => {
+        throw new Error("startup prototype secret");
+      },
+      has: (): never => {
+        throw new Error("startup has secret");
+      },
+    });
+
+    expect(() => {
+      reportStartupFailure(reason);
+    }).not.toThrow();
+    expect(consoleError).toHaveBeenCalledWith(
+      "Failed to initialize application.",
+      { reasonType: "object" },
+    );
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+      "raw exception stack",
+    );
+  });
 });

@@ -305,31 +305,26 @@ export class Log {
 
   /** Returns safe structured details without serializing arbitrary error data. */
   public static summarizeError(reason: unknown): Record<string, string> {
-    if (!(reason instanceof Error)) return { reasonType: typeof reason };
-    const errorLike: Error & {
-      cause?: unknown;
-      code?: unknown;
-      status?: unknown;
-      statusCode?: unknown;
-    } = reason;
+    if (!isErrorValue(reason)) return { reasonType: typeof reason };
     const summary: Record<string, string> = {
-      errorName: this.__formatStableValue(reason.name) ?? "Error",
+      errorName:
+        this.__formatStableValue(readSafeProperty(reason, "name")) ?? "Error",
     };
     const errorCode: string | undefined = this.__formatStableValue(
-      errorLike.code,
+      readSafeProperty(reason, "code"),
     );
-    const status: string | undefined = this.__formatStableValue(
-      errorLike.status ?? errorLike.statusCode,
-    );
+    const status: string | undefined =
+      this.__formatStableValue(readSafeProperty(reason, "status")) ??
+      this.__formatStableValue(readSafeProperty(reason, "statusCode"));
     if (errorCode !== undefined) summary.errorCode = errorCode;
     if (status !== undefined) summary.status = status;
-    if (errorLike.cause instanceof Error) {
-      const cause: Error & { code?: unknown } = errorLike.cause;
+    const cause: unknown = readSafeProperty(reason, "cause");
+    if (isErrorValue(cause)) {
       const causeName: string | undefined = this.__formatStableValue(
-        cause.name,
+        readSafeProperty(cause, "name"),
       );
       const causeCode: string | undefined = this.__formatStableValue(
-        cause.code,
+        readSafeProperty(cause, "code"),
       );
       if (causeName !== undefined) summary.causeName = causeName;
       if (causeCode !== undefined) summary.causeCode = causeCode;
@@ -383,7 +378,7 @@ export class Log {
     depth: number = 0,
   ): void {
     if (value === "_NOT_SET_" || value === undefined || value === null) return;
-    if (value instanceof Error) {
+    if (isErrorValue(value)) {
       Object.assign(target, this.summarizeError(value));
       return;
     }
@@ -401,10 +396,14 @@ export class Log {
       return;
     }
     seen.add(value);
-    if (Array.isArray(value)) {
-      target.values = value
-        .slice(0, 32)
-        .map(item => this.__safeNestedValue(item, seen, depth + 1));
+    if (isArrayValue(value)) {
+      try {
+        target.values = (value as unknown[])
+          .slice(0, 32)
+          .map(item => this.__safeNestedValue(item, seen, depth + 1));
+      } catch (_reason: unknown) {
+        target.serializationFailure = true;
+      }
       return;
     }
     try {
@@ -552,7 +551,7 @@ export class Log {
   }
 
   private static __formatUnknown(item: unknown): unknown {
-    if (typeof item === "object" && !(item instanceof Error)) {
+    if (typeof item === "object" && !isErrorValue(item)) {
       try {
         return util.inspect(item, {
           showHidden: false,
@@ -637,7 +636,7 @@ export class Log {
     depth: number,
   ): unknown {
     if (value === undefined || value === null) return undefined;
-    if (value instanceof Error) return this.summarizeError(value);
+    if (isErrorValue(value)) return this.summarizeError(value);
     if (typeof value !== "object") return this.__safeScalar(value);
     if (depth > maximumNestedDepth) return depthLimitMarker;
     if (seen.has(value)) return "[Circular]";
@@ -661,7 +660,7 @@ export class Log {
     if (
       typeof fields === "object" &&
       fields !== null &&
-      !Array.isArray(fields)
+      !isArrayValue(fields)
     ) {
       this.__collectFields(fields, sanitized, new WeakSet());
     }
@@ -692,5 +691,35 @@ export class Log {
       encoding: "utf8",
       flag: "a",
     });
+  }
+}
+
+function isErrorValue(value: unknown): value is Error {
+  try {
+    return value instanceof Error;
+  } catch (_reason: unknown) {
+    return false;
+  }
+}
+
+function isArrayValue(value: object): boolean {
+  try {
+    return Array.isArray(value);
+  } catch (_reason: unknown) {
+    return false;
+  }
+}
+
+function readSafeProperty(value: unknown, property: string): unknown {
+  try {
+    if (
+      (typeof value !== "object" && typeof value !== "function") ||
+      value === null
+    ) {
+      return undefined;
+    }
+    return (value as Record<string, unknown>)[property];
+  } catch (_reason: unknown) {
+    return undefined;
   }
 }
