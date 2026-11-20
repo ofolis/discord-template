@@ -93,3 +93,15 @@ If publication is interrupted, use the release workflow's explicit `recovery_ver
 JSON persistence uses `DATA_DIRECTORY`. Storage keys may contain only ASCII letters, numbers, underscores, and hyphens, and each key maps to one `<key>.json` file. A `JsonStore.update()` callback must not re-enter `read()`, `write()`, or `update()` for the same key.
 
 Keep diagnostic logging limited to identifiers and operational metadata. Do not log tokens, environment objects, Discord payloads, interaction options, message content, or persisted user data.
+
+### Persistent application logging
+
+The application keeps ordinary console logging available and also writes best-effort JSONL logs when persistent logging is initialized. Development logs are written under `./logs`; production logs are written under `<DATA_DIRECTORY>/logs`.
+
+Records contain a UTC timestamp, severity, message, and optional fields. Daily files are named `application-logs-YYYY-MM-DD.jsonl`, rotate into numbered segments at the 10 MiB default size, and are retained for 7 days in development or 14 days in production.
+
+Persistent logging is best effort; filesystem failures are reported through the console without failing application startup or removing console diagnostics.
+
+Trusted `Log.event()` calls use stable uppercase snake-case identifiers for durable lifecycle and operational records. Callers must use nonsensitive event identifiers and diagnostic fields; tokens, credentials, payloads, message content, and exception details must not be supplied.
+
+Startup failures use the generic classifications `CONFIG_INVALID`, `DISCORD_INITIALIZATION_FAILED`, or `STARTUP_UNEXPECTED`, with only safe operational metadata reported.

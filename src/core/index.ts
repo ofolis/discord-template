@@ -17,6 +17,12 @@ export {
   StorageOperationError,
 } from "./json-store";
 export { Log } from "./log";
+export type { LogSeverity } from "./log";
 export { reportStartupFailure } from "./startup-diagnostics";
+export {
+  StartupDiagnosticError,
+  asStartupDiagnostic,
+  configurationError,
+} from "./startup-error";
 export * from "./types";
 export { Utils } from "./utils";

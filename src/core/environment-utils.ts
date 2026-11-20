@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { configurationError } from "./startup-error";
 
 export class EnvironmentUtils {
   private static __didLoadDotEnv: boolean = false;
@@ -17,7 +18,8 @@ export class EnvironmentUtils {
     if (value.toUpperCase() === "FALSE") {
       return false;
     }
-    throw new Error(
+    throw configurationError(
+      key,
       `Configuration value "${key}" must be either "true" or "false".`,
     );
   }
@@ -33,12 +35,14 @@ export class EnvironmentUtils {
   public static getRequiredEnvVariable(key: string): string {
     const value: string | undefined = this.getOptionalEnvVariable(key);
     if (value === undefined) {
-      throw new Error(
+      throw configurationError(
+        key,
         `Configuration value "${key}" is required but was not provided.`,
       );
     }
     if (value.trim().length === 0) {
-      throw new Error(
+      throw configurationError(
+        key,
         `Configuration value "${key}" is required but was empty.`,
       );
     }

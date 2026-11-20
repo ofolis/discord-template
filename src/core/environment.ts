@@ -3,6 +3,7 @@ import { MersenneTwister19937, Random } from "random-js";
 import * as packageJson from "../../package.json";
 import { Log } from "../core";
 import { EnvironmentUtils } from "./environment-utils";
+import { configurationError } from "./startup-error";
 import type { CoreConfig, PackageContext } from "./types";
 
 export class Environment {
@@ -61,7 +62,8 @@ export class Environment {
       configuredDirectory.trim().length === 0 ||
       configuredDirectory.includes("\0")
     ) {
-      throw new Error(
+      throw configurationError(
+        "DATA_DIRECTORY",
         'Configuration value "DATA_DIRECTORY" must be a valid non-empty path.',
       );
     }
