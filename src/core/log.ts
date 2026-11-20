@@ -163,7 +163,10 @@ export class Log {
       throw new Error("Invalid log event identifier.");
     }
     if (severity === "DEBUG" && !Environment.config.devMode) return;
-    const data: readonly unknown[] = fields === undefined ? [] : [fields];
+    const sanitizedFields: Record<string, unknown> =
+      fields === undefined ? {} : this.__sanitizeEventFields(fields);
+    const data: readonly unknown[] =
+      Object.keys(sanitizedFields).length === 0 ? [] : [sanitizedFields];
     if (severity === "ERROR") {
       this.__logMessage(
         "error",
@@ -172,6 +175,7 @@ export class Log {
         eventCode,
         data,
         eventCode,
+        sanitizedFields,
       );
       return;
     }
@@ -183,14 +187,31 @@ export class Log {
         eventCode,
         data,
         eventCode,
+        sanitizedFields,
       );
       return;
     }
     if (severity === "DEBUG") {
-      this.__logMessage("log", severity, "\x1b[2m", eventCode, data, eventCode);
+      this.__logMessage(
+        "log",
+        severity,
+        "\x1b[2m",
+        eventCode,
+        data,
+        eventCode,
+        sanitizedFields,
+      );
       return;
     }
-    this.__logMessage("log", severity, "", eventCode, data, eventCode);
+    this.__logMessage(
+      "log",
+      severity,
+      "",
+      eventCode,
+      data,
+      eventCode,
+      sanitizedFields,
+    );
   }
 
   /** Flushes queued records within the supplied time budget. */
@@ -457,6 +478,7 @@ export class Log {
     severity: LogSeverity,
     data: readonly unknown[],
     persistentMessage: string,
+    sanitizedFields?: Record<string, unknown>,
   ): void {
     if (this.__fileOptions === undefined || this.__persistentSinkDisabled)
       return;
@@ -466,12 +488,14 @@ export class Log {
       severity,
       message: persistentMessage,
     };
-    const fields: Record<string, unknown> = {};
-    data.forEach(item => {
-      if (typeof item === "object" && item !== null && !Array.isArray(item)) {
-        this.__collectFields(item, fields, new WeakSet());
-      }
-    });
+    const fields: Record<string, unknown> = sanitizedFields ?? {};
+    if (sanitizedFields === undefined) {
+      data.forEach(item => {
+        if (typeof item === "object" && item !== null && !Array.isArray(item)) {
+          this.__collectFields(item, fields, new WeakSet());
+        }
+      });
+    }
     if (Object.keys(fields).length > 0) record.fields = fields;
     let serialized: string;
     try {
@@ -560,6 +584,7 @@ export class Log {
     context: string,
     data: readonly unknown[],
     persistentMessage: string = persistentLogMessage,
+    sanitizedFields?: Record<string, unknown>,
   ): void {
     console[method](
       `\x1b[2m${this.__formatPrefix()} [${severity}]\x1b[0m ${color}%s\x1b[0m`,
@@ -568,7 +593,12 @@ export class Log {
     data.forEach(item => {
       if (item !== "_NOT_SET_") this.__logData(method, severity, item);
     });
-    this.__enqueueFileRecord(severity, data, persistentMessage);
+    this.__enqueueFileRecord(
+      severity,
+      data,
+      persistentMessage,
+      sanitizedFields,
+    );
   }
 
   private static __reportFileFailure(reason: unknown): void {
@@ -622,6 +652,20 @@ export class Log {
       return Number.isFinite(value) ? value : String(value);
     if (typeof value === "boolean") return value;
     return "[Unsupported]";
+  }
+
+  private static __sanitizeEventFields(
+    fields: unknown,
+  ): Record<string, unknown> {
+    const sanitized: Record<string, unknown> = {};
+    if (
+      typeof fields === "object" &&
+      fields !== null &&
+      !Array.isArray(fields)
+    ) {
+      this.__collectFields(fields, sanitized, new WeakSet());
+    }
+    return sanitized;
   }
 
   private static async __writeRecord(pending: PendingRecord): Promise<void> {

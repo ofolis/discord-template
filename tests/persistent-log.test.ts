@@ -194,6 +194,9 @@ describe("persistent logging", () => {
 
   it("persists trusted event identifiers while sanitizing event fields", async () => {
     const directory: string = await createLogDirectory();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     vi.spyOn(Environment, "config", "get").mockReturnValue({
       devMode: true,
     } as never);
@@ -203,9 +206,14 @@ describe("persistent logging", () => {
     });
 
     Log.event("OPERATION_FAILED", "ERROR", {
+      count: 2,
+      credential: "credential-secret",
       operation: "read",
+      payload: { token: "synthetic-secret" },
       reason: error,
+      result: { status: "ok", token: "synthetic-secret" },
       token: "synthetic-secret",
+      unknown: "discarded",
     });
     await Log.flush();
 
@@ -214,12 +222,126 @@ describe("persistent logging", () => {
       message: "OPERATION_FAILED",
       severity: "ERROR",
       fields: {
+        count: 2,
         operation: "read",
         reason: { errorName: "Error" },
+        result: { status: "ok" },
       },
     });
     expect(JSON.stringify(record)).not.toContain("synthetic-secret");
     expect(JSON.stringify(record)).not.toContain("synthetic stack");
+    expect(consoleError).toHaveBeenCalledTimes(2);
+    expect(consoleError.mock.calls[1]?.[1]).toEqual(expect.any(String));
+    expect(JSON.stringify(consoleError.mock.calls)).toContain(
+      "OPERATION_FAILED",
+    );
+    expect(JSON.stringify(consoleError.mock.calls)).toContain("operation");
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+      "synthetic-secret",
+    );
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+      "credential-secret",
+    );
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+      "synthetic stack",
+    );
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain("unknown");
+  });
+
+  it("sanitizes malformed event fields without inspecting caller objects", async () => {
+    const directory: string = await createLogDirectory();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    vi.spyOn(Environment, "config", "get").mockReturnValue({
+      devMode: true,
+    } as never);
+    Log.initialize({ directory, devMode: true });
+    const throwingGetter: Record<string, unknown> = {};
+    Object.defineProperty(throwingGetter, "operation", {
+      enumerable: true,
+      get: () => {
+        throw new Error("getter-secret");
+      },
+    });
+    const throwingProxy: object = new Proxy(
+      {},
+      {
+        ownKeys: (): string[] => {
+          throw new Error("proxy-secret");
+        },
+      },
+    );
+
+    expect(() => {
+      Log.event("MALFORMED_EVENT", "ERROR", throwingGetter);
+      Log.event("PROXY_EVENT", "ERROR", throwingProxy);
+    }).not.toThrow();
+    await Log.flush();
+
+    const records = await readLogRecords(directory);
+    expect(records).toHaveLength(2);
+    expect(JSON.stringify(records)).not.toContain("getter-secret");
+    expect(JSON.stringify(records)).not.toContain("proxy-secret");
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+      "getter-secret",
+    );
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+      "proxy-secret",
+    );
+  });
+
+  it("keeps event console output sanitized before initialization and after sink failure", async () => {
+    const directory: string = await createLogDirectory();
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    vi.spyOn(Environment, "config", "get").mockReturnValue({
+      devMode: true,
+    } as never);
+
+    Log.event("PRE_INIT_EVENT", "INFO", {
+      operation: "read",
+      token: "pre-init-secret",
+    });
+    expect(JSON.stringify(consoleLog.mock.calls)).toContain("operation");
+    expect(JSON.stringify(consoleLog.mock.calls)).not.toContain(
+      "pre-init-secret",
+    );
+
+    const failurePath: string = join(directory, "not-a-directory");
+    await writeFile(failurePath, "fixture");
+    Log.initialize({ directory: failurePath, devMode: true });
+    Log.event("DISABLED_SINK_EVENT", "ERROR", {
+      operation: "write",
+      payload: { token: "disabled-sink-secret" },
+      token: "disabled-sink-secret",
+    });
+    await Log.flush(100);
+
+    expect(JSON.stringify(consoleError.mock.calls)).toContain(
+      "DISABLED_SINK_EVENT",
+    );
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+      "disabled-sink-secret",
+    );
+  });
+
+  it("suppresses sanitized DEBUG events outside development mode", async () => {
+    const directory: string = await createLogDirectory();
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(Environment, "config", "get").mockReturnValue({
+      devMode: false,
+    } as never);
+
+    Log.event("SUPPRESSED_EVENT", "DEBUG", {
+      operation: "debug",
+      token: "debug-secret",
+    });
+
+    expect(consoleLog).not.toHaveBeenCalled();
+    expect(await readdir(directory)).toEqual([]);
   });
 
   it("persists deployment counts and safe error summaries without exception content", async () => {
